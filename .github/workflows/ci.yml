@@ -1,0 +1,88 @@
+name: CI / CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── 1. CVE & dependency security scan ───────────────────────────────────────
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivy — filesystem CVE scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true   # skip upstream issues with no available fix
+          exit-code: 1
+
+      - name: pip-audit — Python dependency scan
+        run: |
+          pip install pip-audit --quiet
+          pip-audit -r backend/requirements.txt --desc on
+
+      - name: npm audit — frontend dependency scan
+        working-directory: frontend
+        run: npm audit --audit-level=critical
+
+  # ── 2. Backend unit tests ────────────────────────────────────────────────────
+  test-backend:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt pytest --quiet
+
+      - run: pytest tests/ -v --tb=short
+
+  # ── 3. Frontend type-check & build ──────────────────────────────────────────
+  build-frontend:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run build
+        env:
+          # placeholder — real value set in Vercel dashboard
+          NEXT_PUBLIC_API_URL: https://placeholder.example.com
+
+  # ── 4. Deploy backend to Render (main branch only, all checks must pass) ─────
+  deploy-backend:
+    name: Deploy → Render
+    needs: [security, test-backend, build-frontend]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy hook
+        run: |
+          curl --fail-with-body -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
+        # Set RENDER_DEPLOY_HOOK in GitHub repo Settings → Secrets → Actions
+        # Get the hook URL from Render dashboard → your service → Settings → Deploy Hook
