@@ -97,16 +97,17 @@ class DummyPipeline:
 
 class DummyRedis:
     def __init__(self):
-        self.values = {
-            "session_room:user-a": "room-1",
-            "session_room:user-b": "room-1",
-        }
+        self.values = {}
         self.hashes = {
             "room:room-1": {
                 "user_a": "user-a",
                 "user_b": "user-b",
                 "status": "active",
             }
+        }
+        self.sets = {
+            "active_rooms:user-a": {"room-1"},
+            "active_rooms:user-b": {"room-1"},
         }
         self.deleted = []
 
@@ -124,6 +125,15 @@ class DummyRedis:
             self.deleted.append(key)
             self.values.pop(key, None)
 
+    async def smembers(self, key):
+        return set(self.sets.get(key, set()))
+
+    async def srem(self, key, *members):
+        s = self.sets.get(key, set())
+        for m in members:
+            s.discard(m)
+        self.sets[key] = s
+
 
 def test_close_room_clears_active_session_mapping(monkeypatch):
     from services import session
@@ -137,8 +147,8 @@ def test_close_room_clears_active_session_mapping(monkeypatch):
 
     asyncio.run(session.close_room("room-1"))
 
-    assert "session_room:user-a" in redis.deleted
-    assert "session_room:user-b" in redis.deleted
+    assert "room-1" not in redis.sets.get("active_rooms:user-a", set())
+    assert "room-1" not in redis.sets.get("active_rooms:user-b", set())
 
 
 def test_get_active_room_id_for_session_clears_stale_mapping(monkeypatch):
@@ -155,4 +165,4 @@ def test_get_active_room_id_for_session_clears_stale_mapping(monkeypatch):
     room_id = asyncio.run(session.get_active_room_id_for_session("user-a"))
 
     assert room_id is None
-    assert "session_room:user-a" in redis.deleted
+    assert "room-1" not in redis.sets.get("active_rooms:user-a", set())

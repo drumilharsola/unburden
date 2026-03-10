@@ -1,8 +1,9 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FlowLogo } from "@/components/FlowLogo";
+import { parseIntent, intentHeading, intentBody } from "@/lib/intent";
 
 const STEPS = [
   {
@@ -33,6 +34,8 @@ const STEPS = [
 
 function OnboardingContent() {
   const router = useRouter();
+  const params = useSearchParams();
+  const intent = parseIntent(params.get("intent"));
   const [step, setStep] = useState(0);
   const current = STEPS[step];
   const isLast = step === STEPS.length - 1;

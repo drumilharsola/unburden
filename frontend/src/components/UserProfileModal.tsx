@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { api, AuthError } from "@/lib/api";
 import { avatarUrl } from "@/lib/avatars";
-import { ReportModal } from "@/components/ReportModal";
 
 interface Props {
   username: string;
@@ -32,8 +31,6 @@ export function UserProfileModal({ username, token, peerSessionId, roomId, onClo
   const [blockDone, setBlockDone] = useState(false);
   const [blockError, setBlockError] = useState("");
   const [confirmingBlock, setConfirmingBlock] = useState(false);
-  const [showReport, setShowReport] = useState(false);
-
   useEffect(() => {
     api.getUserProfile(token, username)
       .then(setProfile)
@@ -234,24 +231,7 @@ export function UserProfileModal({ username, token, peerSessionId, roomId, onClo
                         >
                           {blockDone ? "Blocked" : blocking ? "Blocking…" : "Block"}
                         </button>
-                        <button
-                          onClick={() => setShowReport(true)}
-                          style={{
-                            flex: 1,
-                            padding: "10px 14px",
-                            borderRadius: "14px",
-                            border: "1px solid rgba(232,128,128,0.3)",
-                            background: "transparent",
-                            color: "rgba(232,128,128,0.85)",
-                            fontSize: "13px",
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            fontFamily: "var(--font-ui)",
-                            transition: "all 0.2s",
-                          }}
-                        >
-                          Report
-                        </button>
+
                       </>
                     )}
                   </div>
@@ -265,7 +245,7 @@ export function UserProfileModal({ username, token, peerSessionId, roomId, onClo
           )}
         </div>
       </div>
-      {showReport && <ReportModal onClose={() => setShowReport(false)} roomId={roomId} />}
+
     </>
   );
 }
