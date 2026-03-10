@@ -15,14 +15,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Trivy - filesystem CVE scan
-        uses: aquasecurity/trivy-action@v0.29.0
+        uses: aquasecurity/trivy-action@v0.28.0
         with:
           scan-type: fs
           scan-ref: .
           severity: CRITICAL,HIGH
           ignore-unfixed: true   # skip upstream issues with no available fix
           exit-code: 1
-          # Pin a supported Trivy engine version to avoid issues around the latest release
           trivy-version: 0.56.1
 
       - name: pip-audit - Python dependency scan
