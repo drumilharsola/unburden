@@ -13,8 +13,9 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from pydantic import BaseModel
 
 from middleware.jwt_auth import require_auth
-from services.matchmaker import enqueue, dequeue
-from services.session import get_profile, get_room_id_for_session
+from services.matchmaker import enqueue, dequeue, is_queued
+from services.session import get_profile, get_active_room_id_for_session
+from services.speaker_board import get_request_for_session
 from db.redis_client import get_redis
 
 router = APIRouter(prefix="/match", tags=["matchmaking"])
@@ -31,10 +32,10 @@ async def join_queue(body: JoinRequest, payload: dict = Depends(require_auth)):
     if not profile:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Complete profile setup first")
 
-    # If already in a room, reject
-    existing_room = await get_room_id_for_session(session_id)
-    if existing_room:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already in a session")
+    if await is_queued(session_id):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already in the matchmaking queue")
+    if await get_request_for_session(session_id):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cancel your speaker request before joining the queue")
 
     country = body.country.upper() if body.country != "global" else "global"
     await enqueue(session_id, country)
@@ -52,7 +53,7 @@ async def cancel_queue(payload: dict = Depends(require_auth)):
 async def match_status(payload: dict = Depends(require_auth)):
     """Polling fallback - check if user has been matched to a room."""
     session_id = payload["sub"]
-    room_id = await get_room_id_for_session(session_id)
+    room_id = await get_active_room_id_for_session(session_id)
     if room_id:
         return {"matched": True, "room_id": room_id}
     return {"matched": False}

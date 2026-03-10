@@ -15,11 +15,16 @@ from typing import Optional
 from db.redis_client import get_redis
 
 SPEAK_TTL = 300  # auto-expire speaker hash after 5 minutes
+MATCH_RESULT_TTL = 300
 
 
 async def post_request(session_id: str, username: str, avatar_id: str = "0") -> str:
     """Create a speaker request. Returns request_id."""
     redis = await get_redis()
+    avatar_value = int(avatar_id)
+    if not 0 <= avatar_value <= 15:
+        raise ValueError("avatar_id must be 0-15")
+    avatar_id = str(avatar_value)
 
     # Cancel any existing request from this session first
     await cancel_request(session_id)
@@ -50,6 +55,7 @@ async def post_request(session_id: str, username: str, avatar_id: str = "0") -> 
     await redis.publish("board:updates", json.dumps({
         "event": "new_request",
         "request_id": request_id,
+        "session_id": session_id,
         "username": username,
         "avatar_id": avatar_id,
         "posted_at": now,
@@ -96,6 +102,31 @@ async def get_board() -> list[dict]:
     return result
 
 
+async def get_request(request_id: str) -> Optional[dict]:
+    """Return a single active speaker request, or None if it no longer exists."""
+    redis = await get_redis()
+    data = await redis.hgetall(f"speak:req:{request_id}")
+    if not data:
+        matched_result = await redis.hgetall(f"speak:result:{request_id}")
+        if matched_result:
+            return {
+                "request_id": request_id,
+                "status": "matched",
+                "room_id": matched_result.get("room_id", ""),
+                "session_id": matched_result.get("session_id", ""),
+            }
+
+        # Backward compatibility for older temporary string values.
+        matched_room_id = await redis.get(f"speak:result:{request_id}")
+        if matched_room_id:
+            return {
+                "request_id": request_id,
+                "status": "matched",
+                "room_id": matched_room_id,
+            }
+    return data if data else None
+
+
 async def accept_request(request_id: str, listener_session_id: str) -> Optional[str]:
     """
     Listener accepts a speaker request.
@@ -122,6 +153,11 @@ async def accept_request(request_id: str, listener_session_id: str) -> Optional[
     # Create the chat room
     from services.session import create_room
     room_id = await create_room(speaker_session_id, listener_session_id)
+    pipe = redis.pipeline(transaction=False)
+    pipe.hset(f"speak:result:{request_id}", "room_id", room_id)
+    pipe.hset(f"speak:result:{request_id}", "session_id", speaker_session_id)
+    pipe.expire(f"speak:result:{request_id}", MATCH_RESULT_TTL)
+    await pipe.execute()
 
     # Notify both sides they are matched
     payload = json.dumps({"event": "matched", "room_id": room_id})

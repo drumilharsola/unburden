@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useAuthStore } from "@/store/authStore";
 import { FlowLogo } from "@/components/FlowLogo";
 
+
 const MARQUEE_ITEMS = [
-  "Unburden in 15 minutes", "Completely anonymous", "No stored messages",
+  "UNBurDEN in 15 minutes", "Completely anonymous", "No stored messages",
   "Real humans only", "No advice, just presence", "Disappears in 7 days",
 ];
 
 const FEATURES = [
-  { num: "01", title: "Unburden yourself", desc: "Say what’s weighing on you without names, judgment, or consequences." },
+  { num: "01", title: "UNBurDEN yourself", desc: "Say what’s weighing on you without names, judgment, or consequences." },
   { num: "02", title: "Be a steady presence", desc: "Show up for someone with calm attention. No advice needed." },
   { num: "03", title: "15 minutes", desc: "Still enough to matter. Short enough to stay safe. The timer keeps it bounded." },
   { num: "04", title: "No trace", desc: "Sessions disappear. Words fade. Identity vanishes after 7 days." },
@@ -23,7 +24,7 @@ export default function HomePage() {
   const authed = Boolean(token && username);
 
   return (
-    <div className="grain" style={{ minHeight: "100vh", background: "var(--ink)", overflow: "hidden" }}>
+    <div className="grain home-shell" style={{ minHeight: "100vh", background: "var(--ink)", overflow: "hidden" }}>
       <div className="dark-canvas" style={{ minHeight: "100vh", overflow: "visible" }}>
         <div className="orb orb-a" />
         <div className="orb orb-b" />
@@ -31,7 +32,7 @@ export default function HomePage() {
         <div className="orb orb-d" />
 
         {/* Nav */}
-        <nav style={{
+        <nav className="home-nav" style={{
           position: "relative", zIndex: 10,
           padding: "28px 48px",
           display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -41,16 +42,14 @@ export default function HomePage() {
             <span className="t-label" style={{ color: "var(--slate)" }}>
               Anonymous · Ephemeral · Human
             </span>
-            {authed ? (
-              <Link href="/lobby" className="btn btn-primary btn-md">Open board</Link>
-            ) : (
-              <Link href="/verify" className="btn btn-primary btn-md">Get started</Link>
+            {!authed && (
+              <Link href="/onboarding" className="btn btn-primary btn-md">Get started</Link>
             )}
           </div>
         </nav>
 
         {/* Hero */}
-        <section style={{
+        <section className="hero-content" style={{
           position: "relative", zIndex: 5,
           minHeight: "calc(100vh - 100px)",
           display: "flex", flexDirection: "column", justifyContent: "center",
@@ -60,7 +59,7 @@ export default function HomePage() {
           <div style={{ marginBottom: 32 }}>
             <div className="pill pill-accent">
               <span className="pill-dot" />
-              Open · Safe · No history
+              Open · Safe · Free
             </div>
           </div>
           <h1 style={{
@@ -72,7 +71,7 @@ export default function HomePage() {
             color: "var(--white)",
             marginBottom: 36,
           }}>
-            Unburden<br />
+            UNBurDEN<br />
             <em style={{
               fontStyle: "italic",
               background: "linear-gradient(135deg, var(--flow-1), var(--flow-2))",
@@ -88,20 +87,14 @@ export default function HomePage() {
             fontFamily: "var(--font-ui)",
           }}>
             Find a real human who will sit with you - no names, no records, no advice unless you want it.
-            Just fifteen minutes of honest presence.
+            Just few minutes of honest presence.
           </p>
-          <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+          <div className="hero-actions" style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
             <Link
-              href={authed ? "/lobby" : "/verify"}
+              href={authed ? "/lobby" : "/onboarding"}
               className="btn btn-primary btn-lg"
             >
-              I need to vent →
-            </Link>
-            <Link
-              href={authed ? "/lobby" : "/verify"}
-              className="btn btn-ghost btn-lg"
-            >
-              I&apos;ll be someone&apos;s anchor
+              {authed ? "Let's Unburden" : "Get started"}
             </Link>
           </div>
         </section>
@@ -136,7 +129,7 @@ export default function HomePage() {
         </div>
 
         {/* Features strip */}
-        <div style={{
+        <div className="feature-grid" style={{
           position: "relative", zIndex: 5,
           display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
           borderTop: "1px solid rgba(255,255,255,0.06)",

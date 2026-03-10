@@ -8,6 +8,8 @@ interface AuthState {
   avatarId: number | null;
   emailVerified: boolean | null;
   email: string | null; // held temporarily during register flow, cleared after
+  _hasHydrated: boolean;
+  setHasHydrated: (v: boolean) => void;
   setEmail: (email: string) => void;
   clearEmail: () => void;
   setAuth: (token: string, sessionId: string) => void;
@@ -26,7 +28,9 @@ export const useAuthStore = create<AuthState>()(
       avatarId: null,
       emailVerified: null,
       email: null,
+      _hasHydrated: false,
 
+      setHasHydrated: (v) => set({ _hasHydrated: v }),
       setEmail: (email) => set({ email }),
       clearEmail: () => set({ email: null }),
 
@@ -50,7 +54,7 @@ export const useAuthStore = create<AuthState>()(
         }),
     }),
     {
-      name: "varta-auth",
+      name: "UNBurDEN-auth",
       // Only persist token + profile - not email (sensitive)
       partialize: (state) => ({
         token: state.token,
@@ -59,6 +63,9 @@ export const useAuthStore = create<AuthState>()(
         avatarId: state.avatarId,
         emailVerified: state.emailVerified,
       }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );

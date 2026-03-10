@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from middleware.jwt_auth import require_auth
-from services.session import get_room_id_for_session, get_room
+from services.session import get_active_room_id_for_session, get_room
 from db.redis_client import get_redis
 
 router = APIRouter(prefix="/report", tags=["report"])
@@ -31,12 +31,13 @@ REPORT_TTL = 7 * 24 * 3600  # 7 days
 class ReportRequest(BaseModel):
     reason: str
     detail: str = ""
+    room_id: str | None = None
 
     class Config:
         str_strip_whitespace = True
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def submit_report(body: ReportRequest, payload: dict = Depends(require_auth)):
     if body.reason not in REPORT_REASONS:
         raise HTTPException(
@@ -45,16 +46,19 @@ async def submit_report(body: ReportRequest, payload: dict = Depends(require_aut
         )
 
     session_id = payload["sub"]
-    room_id = await get_room_id_for_session(session_id)
+    room_id = body.room_id or await get_active_room_id_for_session(session_id)
     if not room_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You must be in an active session to report",
+            detail="You must be in an active session or provide a recent room_id to report",
         )
 
     room = await get_room(room_id)
     if not room:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
+    is_member = room.get("user_a") == session_id or room.get("user_b") == session_id
+    if not is_member:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     peer_id = room["user_b"] if room["user_a"] == session_id else room["user_a"]
 
@@ -71,8 +75,11 @@ async def submit_report(body: ReportRequest, payload: dict = Depends(require_aut
     }
 
     # Store as Redis hash; auto-expires
-    await redis.hset(f"report:{report_id}", mapping=report_data)
-    await redis.expire(f"report:{report_id}", REPORT_TTL)
+    pipe = redis.pipeline()
+    for field, value in report_data.items():
+        pipe.hset(f"report:{report_id}", field, value)
+    pipe.expire(f"report:{report_id}", REPORT_TTL)
+    await pipe.execute()
 
     # Index by reported session for admin lookup (optional future use)
     await redis.rpush(f"reports_for:{peer_id}", report_id)

@@ -16,8 +16,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Unburden - a safe place to be heard",
-  description: "Unburden yourself in 15 minutes. Anonymous, no pressure, just presence.",
+  title: "UNBurDEN - a safe place to be heard",
+  description: "UNBurDEN yourself in 15 minutes. Anonymous, no pressure, just presence.",
 };
 
 export default function RootLayout({

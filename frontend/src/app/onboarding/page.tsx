@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FlowLogo } from "@/components/FlowLogo";
 
@@ -31,20 +31,20 @@ const STEPS = [
   },
 ];
 
-export default function OnboardingPage() {
+function OnboardingContent() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const current = STEPS[step];
   const isLast = step === STEPS.length - 1;
 
   return (
-    <div className="dark-canvas grain" style={{ minHeight: "100vh", display: "flex", flexDirection: "column", position: "relative" }}>
+    <div className="dark-canvas grain onboarding-shell" style={{ minHeight: "100vh", display: "flex", flexDirection: "column", position: "relative" }}>
       <div className="orb orb-a" />
       <div className="orb orb-b" />
       <div className="orb orb-c" />
 
       {/* Nav */}
-      <div style={{ padding: "24px 32px", position: "relative", zIndex: 10 }}>
+      <div className="top-nav" style={{ padding: "24px 32px", position: "relative", zIndex: 10 }}>
         <FlowLogo />
       </div>
 
@@ -67,8 +67,34 @@ export default function OnboardingPage() {
           ))}
         </div>
 
+        <div style={{ marginBottom: 22, textAlign: "center", maxWidth: 540 }}>
+          <span className="pill pill-accent" style={{ marginBottom: 14 }}>
+            {intent === "support" ? "Keeper path" : intent === "speak" ? "Sharer path" : "How Unburden works"}
+          </span>
+          <h1 style={{
+            fontFamily: "var(--font-display)",
+            fontSize: "clamp(34px, 7vw, 56px)",
+            fontWeight: 700,
+            color: "var(--white)",
+            letterSpacing: "-0.03em",
+            lineHeight: 1.05,
+            marginBottom: 12,
+          }}>
+            {intentHeading(intent)}
+          </h1>
+          <p style={{
+            fontSize: 15,
+            color: "var(--fog)",
+            lineHeight: 1.7,
+            fontFamily: "var(--font-ui)",
+            fontWeight: 300,
+          }}>
+            {intentBody(intent)}
+          </p>
+        </div>
+
         {/* Card */}
-        <div className="glass-card" style={{ maxWidth: 480, width: "100%", padding: "48px 40px", textAlign: "center" }}>
+        <div className="glass-card onboarding-card" style={{ maxWidth: 480, width: "100%", padding: "48px 40px", textAlign: "center" }}>
           <p style={{ fontSize: 48, marginBottom: 16 }}>{current.icon}</p>
           <p className="t-label" style={{ color: "var(--accent)", marginBottom: 8 }}>{current.num}</p>
           <h2 style={{
@@ -86,7 +112,7 @@ export default function OnboardingPage() {
             {current.body}
           </p>
 
-          <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+          <div className="onboarding-actions" style={{ display: "flex", gap: 10, justifyContent: "center" }}>
             {step > 0 && (
               <button
                 onClick={() => setStep(step - 1)}
@@ -96,14 +122,25 @@ export default function OnboardingPage() {
               </button>
             )}
             <button
-              onClick={() => isLast ? router.push("/lobby") : setStep(step + 1)}
+              onClick={() => isLast ? router.push("/verify") : setStep(step + 1)}
               className="btn btn-accent btn-md"
             >
-              {isLast ? "Enter Flow →" : "Next →"}
+              {isLast ? "Continue →" : "Next →"}
             </button>
           </div>
+          <p style={{ marginTop: 18, fontSize: 12, color: "var(--slate)", fontFamily: "var(--font-ui)" }}>
+            You can start speaking as soon as your profile is ready.
+          </p>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: "100vh", background: "var(--ink)" }} />}>
+      <OnboardingContent />
+    </Suspense>
   );
 }

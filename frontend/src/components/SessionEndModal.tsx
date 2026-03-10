@@ -14,7 +14,7 @@ export function SessionEndModal({ canExtend, onExtend, onClose }: SessionEndModa
   const { clear } = useAuthStore();
 
   const handleRematch = () => { onClose(); router.push("/lobby"); };
-  const handleLeave = () => { clear(); router.push("/"); };
+  const handleSignOut = () => { clear(); router.push("/"); };
 
   return (
     <div style={{
@@ -43,16 +43,16 @@ export function SessionEndModal({ canExtend, onExtend, onClose }: SessionEndModa
             </button>
           )}
           <button onClick={handleRematch} className="btn btn-ghost btn-md" style={{ width: "100%" }}>
-            Talk to someone new
+            Back to lobby
           </button>
-          <button onClick={handleLeave} style={{
+          <button onClick={handleSignOut} style={{
             padding: 13, background: "transparent", color: "var(--danger)",
             border: "none", fontFamily: "var(--font-ui)",
             fontSize: 13, fontWeight: 300, cursor: "pointer",
             textDecoration: "underline", textDecorationColor: "rgba(232,128,128,0.3)",
             textUnderlineOffset: "3px",
           }}>
-            Leave quietly
+            Sign out
           </button>
         </div>
       </div>

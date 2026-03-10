@@ -1,13 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { api, AuthError } from "@/lib/api";
 import { avatarUrl } from "@/lib/avatars";
+import { ReportModal } from "@/components/ReportModal";
 
 interface Props {
   username: string;
   token: string;
+  peerSessionId?: string;
+  roomId?: string;
   onClose: () => void;
+  onBlocked?: () => void;
 }
 
 function fmtDate(ts: string): string {
@@ -15,7 +19,7 @@ function fmtDate(ts: string): string {
   return new Date(Number(ts) * 1000).toLocaleDateString([], { year: "numeric", month: "long" });
 }
 
-export function UserProfileModal({ username, token, onClose }: Props) {
+export function UserProfileModal({ username, token, peerSessionId, roomId, onClose, onBlocked }: Props) {
   const [profile, setProfile] = useState<{
     username: string;
     avatar_id: number;
@@ -24,6 +28,11 @@ export function UserProfileModal({ username, token, onClose }: Props) {
     member_since: string;
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [blocking, setBlocking] = useState(false);
+  const [blockDone, setBlockDone] = useState(false);
+  const [blockError, setBlockError] = useState("");
+  const [confirmingBlock, setConfirmingBlock] = useState(false);
+  const [showReport, setShowReport] = useState(false);
 
   useEffect(() => {
     api.getUserProfile(token, username)
@@ -31,6 +40,29 @@ export function UserProfileModal({ username, token, onClose }: Props) {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [username, token]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  const handleBlock = async () => {
+    if (!peerSessionId || blocking) return;
+    setBlocking(true);
+    try {
+      await api.blockUser(token, peerSessionId, username, profile?.avatar_id ?? 0);
+      setBlockDone(true);
+      onBlocked?.();
+    } catch (e) {
+      if (e instanceof AuthError) {
+        setBlockError("Your session has expired. Please refresh the page to log back in.");
+        return;
+      }
+    } finally {
+      setBlocking(false);
+    }
+  };
 
   return (
     <>
@@ -117,8 +149,8 @@ export function UserProfileModal({ username, token, onClose }: Props) {
               {/* Stats grid */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "20px" }}>
                 {[
-                  { label: "Times spoken", value: profile.speak_count, icon: "🎤" },
-                  { label: "Times listened", value: profile.listen_count, icon: "👂" },
+                  { label: "Vent", value: profile.speak_count, icon: "🎤" },
+                  { label: "Listen", value: profile.listen_count, icon: "👂" },
                 ].map((stat) => (
                   <div key={stat.label} style={{
                     background: "rgba(255,253,250,0.06)",
@@ -138,10 +170,92 @@ export function UserProfileModal({ username, token, onClose }: Props) {
               {profile.member_since && (
                 <p style={{
                   textAlign: "center", fontSize: "12px",
-                  color: "rgba(244,241,238,0.28)", margin: 0,
+                  color: "rgba(244,241,238,0.28)", margin: "0 0 20px",
                 }}>
                   ✶ Member since {fmtDate(profile.member_since)}
                 </p>
+              )}
+
+              {peerSessionId && (
+                <>
+                  {blockError && (
+                    <p style={{ fontSize: 12, color: "rgba(232,128,128,0.85)", marginBottom: 10, textAlign: "center", fontFamily: "var(--font-ui)" }}>
+                      {blockError}
+                    </p>
+                  )}
+                  <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                    {confirmingBlock ? (
+                      <>
+                        <button
+                          onClick={() => { setConfirmingBlock(false); void handleBlock(); }}
+                          disabled={blocking}
+                          style={{
+                            flex: 1, padding: "10px 14px", borderRadius: "14px",
+                            border: "1px solid rgba(232,128,128,0.5)",
+                            background: "rgba(232,128,128,0.15)",
+                            color: "rgba(232,128,128,0.9)", fontSize: "13px", fontWeight: 700,
+                            cursor: "pointer", fontFamily: "var(--font-ui)", opacity: blocking ? 0.6 : 1,
+                          }}
+                        >
+                          Yes, block
+                        </button>
+                        <button
+                          onClick={() => setConfirmingBlock(false)}
+                          style={{
+                            flex: 1, padding: "10px 14px", borderRadius: "14px",
+                            border: "1px solid rgba(255,253,250,0.15)",
+                            background: "transparent",
+                            color: "rgba(244,241,238,0.5)", fontSize: "13px", fontWeight: 600,
+                            cursor: "pointer", fontFamily: "var(--font-ui)",
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => setConfirmingBlock(true)}
+                          disabled={blocking || blockDone}
+                          style={{
+                            flex: 1,
+                            padding: "10px 14px",
+                            borderRadius: "14px",
+                            border: "1px solid rgba(232,128,128,0.3)",
+                            background: blockDone ? "rgba(232,128,128,0.08)" : "transparent",
+                            color: blockDone ? "rgba(232,128,128,0.6)" : "rgba(232,128,128,0.85)",
+                            fontSize: "13px",
+                            fontWeight: 600,
+                            cursor: blocking || blockDone ? "default" : "pointer",
+                            fontFamily: "var(--font-ui)",
+                            transition: "all 0.2s",
+                            opacity: blocking ? 0.6 : 1,
+                          }}
+                        >
+                          {blockDone ? "Blocked" : blocking ? "Blocking…" : "Block"}
+                        </button>
+                        <button
+                          onClick={() => setShowReport(true)}
+                          style={{
+                            flex: 1,
+                            padding: "10px 14px",
+                            borderRadius: "14px",
+                            border: "1px solid rgba(232,128,128,0.3)",
+                            background: "transparent",
+                            color: "rgba(232,128,128,0.85)",
+                            fontSize: "13px",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            fontFamily: "var(--font-ui)",
+                            transition: "all 0.2s",
+                          }}
+                        >
+                          Report
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </>
               )}
             </>
           ) : (
@@ -151,6 +265,7 @@ export function UserProfileModal({ username, token, onClose }: Props) {
           )}
         </div>
       </div>
+      {showReport && <ReportModal onClose={() => setShowReport(false)} roomId={roomId} />}
     </>
   );
 }

@@ -1,4 +1,13 @@
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const HTTP_API = "/api";
+const SOCKET_API = process.env.NEXT_PUBLIC_WS_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+const REQUEST_TIMEOUT_MS = 8000;
+
+export class AuthError extends Error {
+  constructor(detail = "Not authenticated") {
+    super(detail);
+    this.name = "AuthError";
+  }
+}
 
 async function request<T>(
   path: string,
@@ -11,10 +20,24 @@ async function request<T>(
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${API}${path}`, { ...options, headers });
+  let res: Response;
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    res = await fetch(`${HTTP_API}${path}`, { ...options, headers, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("The server took too long to respond. Please try again.");
+    }
+    throw new Error("Cannot reach the server right now. Please try again in a moment.");
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
+    if (res.status === 401) throw new AuthError(err.detail ?? "Not authenticated");
     throw new Error(err.detail ?? "Request failed");
   }
   return res.json() as Promise<T>;
@@ -31,8 +54,11 @@ export interface SpeakerRequest {
 export interface RoomSummary {
   room_id: string;
   status: string;          // "active" | "ended"
+  matched_at: string;     // unix timestamp string when the match was created
   started_at: string;     // unix timestamp string
+  duration: string;       // session duration in seconds
   ended_at: string;       // unix timestamp string, or ""
+  peer_session_id: string;
   peer_username: string;
   peer_avatar_id: number;
 }
@@ -43,7 +69,25 @@ export interface RoomMessages extends RoomSummary {
     from: string;
     text: string;
     ts: number;
+    client_id?: string;
   }>;
+}
+
+export interface CurrentSpeakerRequest {
+  request_id: string;
+  session_id?: string;
+  username?: string;
+  avatar_id?: string;
+  posted_at?: string;
+  status?: string;
+  room_id?: string;
+}
+
+export interface BlockedUser {
+  peer_session_id: string;
+  username: string;
+  avatar_id: number;
+  blocked_at: string;
 }
 
 export const api = {
@@ -109,11 +153,28 @@ export const api = {
       token
     ),
 
+  getSpeakerRequest: (token: string, requestId: string) =>
+    request<CurrentSpeakerRequest>(
+      `/board/request/${encodeURIComponent(requestId)}`,
+      {},
+      token
+    ),
+
   acceptSpeaker: (token: string, requestId: string) =>
     request<{ room_id: string }>(`/board/accept/${encodeURIComponent(requestId)}`, { method: "POST" }, token),
 
-  submitReport: (token: string, reason: string, detail?: string) =>
-    request("/report/", { method: "POST", body: JSON.stringify({ reason, detail: detail ?? "" }) }, token),
+  submitReport: (token: string, reason: string, detail?: string, roomId?: string) =>
+    request("/report/", { method: "POST", body: JSON.stringify({ reason, detail: detail ?? "", ...(roomId ? { room_id: roomId } : {}) }) }, token),
+
+  // Block
+  blockUser: (token: string, peerSessionId: string, username: string, avatarId: number) =>
+    request<{ message: string }>("/block/", { method: "POST", body: JSON.stringify({ peer_session_id: peerSessionId, username, avatar_id: avatarId }) }, token),
+
+  unblockUser: (token: string, peerSessionId: string) =>
+    request<{ message: string }>(`/block/${encodeURIComponent(peerSessionId)}`, { method: "DELETE" }, token),
+
+  getBlockedUsers: (token: string) =>
+    request<{ blocked: BlockedUser[] }>("/block/", {}, token),
 
   // Chat history
   getActiveRoom: (token: string) =>
@@ -133,7 +194,7 @@ export const api = {
 
 export const wsUrl = {
   board: (token: string) =>
-    `${API.replace("http", "ws")}/board/ws?token=${encodeURIComponent(token)}`,
+    `${SOCKET_API.replace("http", "ws")}/board/ws?token=${encodeURIComponent(token)}`,
   chat: (token: string, roomId: string) =>
-    `${API.replace("http", "ws")}/chat/ws?token=${encodeURIComponent(token)}&room_id=${encodeURIComponent(roomId)}`,
+    `${SOCKET_API.replace("http", "ws")}/chat/ws?token=${encodeURIComponent(token)}&room_id=${encodeURIComponent(roomId)}`,
 };

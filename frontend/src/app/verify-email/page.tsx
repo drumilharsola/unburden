@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 
+
 type Stage = "loading" | "success" | "error";
 
 function VerifyEmailInner() {

@@ -52,9 +52,9 @@ async def generate_unique_username(redis) -> str:
     return f"{username}{suffix}"
 
 
-async def reserve_username(redis, username: str, session_id: str, ttl_seconds: int = 7200) -> None:
-    """Mark username as in-use for the duration of the session (default 2hr)."""
-    await redis.setex(f"username:{username}", ttl_seconds, session_id)
+async def reserve_username(redis, username: str, session_id: str) -> None:
+    """Persist the username -> session mapping for stable profile lookups."""
+    await redis.set(f"username:{username}", session_id)
 
 
 async def release_username(redis, username: str) -> None:

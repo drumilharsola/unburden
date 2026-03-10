@@ -77,23 +77,28 @@ def _calculate_age(dob: date) -> int:
     return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
 
 
+async def _delete_registration_state(redis, email_hash: str, session_id: str) -> None:
+    await redis.delete(
+        f"email_account:{email_hash}",
+        f"pwd:{session_id}",
+        f"acct_email:{session_id}",
+        f"session_ehash:{session_id}",
+    )
+
+
 async def _send_verify_link(email: str, session_id: str, redis) -> None:
     """Generate a secure token, store it in Redis for 24 h, and email the link."""
     settings = get_settings()
     token = secrets.token_urlsafe(32)
     await redis.setex(f"email_verify_token:{token}", 86400, session_id)
 
-    verify_url = f"{settings.APP_BASE_URL}/verify-email?token={token}"
+    verify_url = f"{settings.APP_BASE_URL.rstrip('/')}/verify-email?token={token}"
 
-    smtp_configured = bool(
-        settings.SMTP_USER
-        and settings.SMTP_PASSWORD
-        and settings.SMTP_USER != "your_email@gmail.com"
-    )
-    if smtp_configured:
+    try:
         await send_verification_email(email, verify_url)
-    else:
-        logger.warning(f"[DEV] Email verification link for {email}: {verify_url}")
+    except Exception:
+        await redis.delete(f"email_verify_token:{token}")
+        raise
 
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
@@ -125,6 +130,11 @@ async def register(body: RegisterRequest):
         await _send_verify_link(email, session_id, redis)
     except Exception as exc:
         logger.error(f"Failed to send verification email to {email}: {exc}")
+        await _delete_registration_state(redis, email_hash, session_id)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="We could not send your verification email. Please try again.",
+        )
 
     return {
         "token": token,
@@ -194,7 +204,10 @@ async def send_verification(payload: dict = Depends(require_auth)):
         await _send_verify_link(email, session_id, redis)
     except Exception as exc:
         logger.error(f"Failed to send verification email: {exc}")
-        raise HTTPException(status_code=503, detail="Failed to send email. Please try again.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Failed to send verification email. Please try again.",
+        )
 
     return {"message": "Verification email sent"}
 
@@ -306,11 +319,25 @@ async def get_me(payload: dict = Depends(require_auth)):
 
 
 @router.get("/user/{username}")
-async def get_user_profile(username: str, _: dict = Depends(require_auth)):
-    """Public stats for a user."""
+async def get_user_profile(username: str, payload: dict = Depends(require_auth)):
+    """Public stats for a user. Returns 404 if the requester has been blocked by the profile owner."""
+    requester_session_id = payload["sub"]
     redis = await get_redis()
     session_id = await redis.get(f"username:{username}")
     if not session_id:
+        profile_keys = await redis.keys("profile:*")
+        for profile_key in profile_keys:
+            profile_session_id = profile_key.split(":", 1)[1]
+            profile = await get_profile(profile_session_id)
+            if profile and profile.get("username") == username:
+                session_id = profile_session_id
+                await reserve_username(redis, username, profile_session_id)
+                break
+    if not session_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    # If the profile owner has blocked the requester, hide the profile entirely
+    is_blocked = await redis.sismember(f"blocked:{session_id}", requester_session_id)
+    if is_blocked:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     profile = await get_profile(session_id)
     if not profile:

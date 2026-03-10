@@ -3,6 +3,7 @@ Backend smoke tests - pure unit tests, no running server or Redis required.
 These run in CI on every push to catch regressions in core service logic.
 """
 
+import asyncio
 import os
 import sys
 
@@ -21,6 +22,12 @@ def test_settings_loads():
     assert s.JWT_ALGORITHM == "HS256"
     assert s.CHAT_SESSION_MINUTES > 0
     assert s.OTP_EXPIRE_MINUTES > 0
+    assert s.APP_BASE_URL
+
+
+def test_settings_expose_resend_api_key_field():
+    from config import get_settings
+    assert hasattr(get_settings(), "RESEND_API_KEY")
 
 
 # ── Email hash ────────────────────────────────────────────────────────────────
@@ -66,3 +73,86 @@ def test_different_hashes_produce_different_tokens():
     t1, _ = create_session_token("hash_a")
     t2, _ = create_session_token("hash_b")
     assert t1 != t2
+
+
+class DummyPipeline:
+    def __init__(self, redis):
+        self.redis = redis
+        self.operations = []
+
+    def hset(self, key, field, value):
+        self.operations.append(("hset", key, field, value))
+
+    def expire(self, key, ttl):
+        self.operations.append(("expire", key, ttl))
+
+    async def execute(self):
+        for operation in self.operations:
+            if operation[0] == "hset":
+                _, key, field, value = operation
+                self.redis.hashes.setdefault(key, {})[field] = value
+            elif operation[0] == "expire":
+                continue
+
+
+class DummyRedis:
+    def __init__(self):
+        self.values = {
+            "session_room:user-a": "room-1",
+            "session_room:user-b": "room-1",
+        }
+        self.hashes = {
+            "room:room-1": {
+                "user_a": "user-a",
+                "user_b": "user-b",
+                "status": "active",
+            }
+        }
+        self.deleted = []
+
+    def pipeline(self, transaction=False):
+        return DummyPipeline(self)
+
+    async def hgetall(self, key):
+        return self.hashes.get(key, {})
+
+    async def get(self, key):
+        return self.values.get(key)
+
+    async def delete(self, *keys):
+        for key in keys:
+            self.deleted.append(key)
+            self.values.pop(key, None)
+
+
+def test_close_room_clears_active_session_mapping(monkeypatch):
+    from services import session
+
+    redis = DummyRedis()
+
+    async def fake_get_redis():
+        return redis
+
+    monkeypatch.setattr(session, "get_redis", fake_get_redis)
+
+    asyncio.run(session.close_room("room-1"))
+
+    assert "session_room:user-a" in redis.deleted
+    assert "session_room:user-b" in redis.deleted
+
+
+def test_get_active_room_id_for_session_clears_stale_mapping(monkeypatch):
+    from services import session
+
+    redis = DummyRedis()
+    redis.hashes["room:room-1"]["status"] = "ended"
+
+    async def fake_get_redis():
+        return redis
+
+    monkeypatch.setattr(session, "get_redis", fake_get_redis)
+
+    room_id = asyncio.run(session.get_active_room_id_for_session("user-a"))
+
+    assert room_id is None
+    assert "session_room:user-a" in redis.deleted

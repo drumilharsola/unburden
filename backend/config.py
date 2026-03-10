@@ -7,17 +7,19 @@ class Settings(BaseSettings):
 
     APP_SECRET_KEY: str = "dev_secret_change_me"
     APP_ENV: str = "development"
+    APP_BASE_URL: str = "http://localhost:3000"
 
     REDIS_URL: str = "redis://localhost:6379/0"
+    RESEND_API_KEY: str = ""
 
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
-    SMTP_FROM: str = "Varta <noreply@varta.app>"
+    SMTP_FROM: str = "UNBurDEN <noreply@UNBurDEN.app>"
 
     JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRE_HOURS: int = 2
+    JWT_EXPIRE_HOURS: int = 168
 
     CHAT_SESSION_MINUTES: int = 15
     HISTORY_TTL_HOURS: int = 1
@@ -32,7 +34,7 @@ class Settings(BaseSettings):
 
     @property
     def allowed_origins_list(self) -> list[str]:
-        return [o.strip() for o in self.ALLOWED_ORIGINS.split(",")]
+        return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]
 
 
 @lru_cache

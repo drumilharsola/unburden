@@ -57,6 +57,11 @@ async def dequeue(session_id: str) -> None:
     await redis.delete(f"queued:{session_id}")
 
 
+async def is_queued(session_id: str) -> bool:
+    redis = await get_redis()
+    return bool(await redis.get(f"queued:{session_id}"))
+
+
 async def _try_match_queue(queue_key: str) -> Optional[tuple[str, str]]:
     """
     Atomically pop two users from a queue.
