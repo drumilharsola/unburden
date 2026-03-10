@@ -7,7 +7,8 @@ import uuid
 import time
 from datetime import datetime, timezone
 
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import PyJWTError
 from config import get_settings
 
 
@@ -36,8 +37,9 @@ def create_session_token(email_hash: str, session_id: str | None = None) -> tupl
 
 
 def decode_session_token(token: str) -> dict:
-    """
-    Decode and validate JWT. Raises JWTError on failure.
+    """Decode and validate JWT.
+
+    Raises PyJWTError on failure.
     Returns payload dict with 'sub' (session_id) and 'eh' (email_hash).
     """
     settings = _settings()

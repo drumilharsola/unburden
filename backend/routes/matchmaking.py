@@ -66,12 +66,12 @@ async def matchmaking_ws(websocket: WebSocket, token: str = ""):
     Server pushes {"event": "matched", "room_id": "..."} when paired.
     """
     # Validate token from query param
-    from jose import JWTError
+    from jwt.exceptions import PyJWTError
     from services.session_token import decode_session_token
     try:
         payload = decode_session_token(token)
         session_id = payload["sub"]
-    except (JWTError, KeyError):
+    except (PyJWTError, KeyError):
         await websocket.close(code=4001, reason="Unauthorized")
         return
 

@@ -4,7 +4,7 @@ JWT authentication dependency for FastAPI routes.
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import JWTError
+from jwt.exceptions import PyJWTError
 
 from services.session_token import decode_session_token
 
@@ -23,7 +23,7 @@ async def require_auth(
         if not payload.get("sub"):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
         return payload
-    except JWTError:
+    except PyJWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token expired or invalid",

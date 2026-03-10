@@ -30,7 +30,7 @@ import logging
 
 import bleach
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from jose import JWTError
+from jwt.exceptions import PyJWTError
 
 from services.session_token import decode_session_token
 from services.session import (
@@ -65,7 +65,7 @@ async def chat_ws(websocket: WebSocket, token: str = "", room_id: str = ""):
     try:
         payload = decode_session_token(token)
         session_id = payload["sub"]
-    except (JWTError, KeyError):
+    except (PyJWTError, KeyError):
         await websocket.close(code=4001, reason="Unauthorized")
         return
 
