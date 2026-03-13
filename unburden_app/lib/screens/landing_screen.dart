@@ -178,26 +178,40 @@ class LandingScreen extends ConsumerWidget {
                       WarmCard(
                         padding: const EdgeInsets.all(28),
                         color: AppColors.ink,
-                        child: Flex(
-                          direction: narrow ? Axis.vertical : Axis.horizontal,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                '"Sometimes a stranger gives you enough quiet to hear yourself again."',
-                                style: AppTypography.display(fontSize: narrow ? 26 : 34, color: AppColors.white),
+                        child: narrow
+                            ? Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '"Sometimes a stranger gives you enough quiet to hear yourself again."',
+                                    style: AppTypography.display(fontSize: 26, color: AppColors.white),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  Text(
+                                    'Every screen, every word, every pause is here because it helps you land softer.',
+                                    style: AppTypography.body(fontSize: 15, color: AppColors.white.withValues(alpha: 0.78)),
+                                  ),
+                                ],
+                              )
+                            : Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      '"Sometimes a stranger gives you enough quiet to hear yourself again."',
+                                      style: AppTypography.display(fontSize: 34, color: AppColors.white),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 20),
+                                  SizedBox(
+                                    width: 240,
+                                    child: Text(
+                                      'Every screen, every word, every pause is here because it helps you land softer.',
+                                      style: AppTypography.body(fontSize: 15, color: AppColors.white.withValues(alpha: 0.78)),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                            SizedBox(width: narrow ? 0 : 20, height: narrow ? 20 : 0),
-                            SizedBox(
-                              width: narrow ? double.infinity : 240,
-                              child: Text(
-                                'Every screen, every word, every pause is here because it helps you land softer.',
-                                style: AppTypography.body(fontSize: 15, color: AppColors.white.withValues(alpha: 0.78)),
-                              ),
-                            ),
-                          ],
-                        ),
                       ),
                     ],
                   ),
@@ -211,8 +225,16 @@ class LandingScreen extends ConsumerWidget {
   }
 
   static Widget _flexSection({required bool narrow, required List<Widget> children}) {
-    return Flex(
-      direction: narrow ? Axis.vertical : Axis.horizontal,
+    if (narrow) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children.map((c) {
+          if (c is Expanded) return c.child;
+          return c;
+        }).toList(),
+      );
+    }
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: children,
     );

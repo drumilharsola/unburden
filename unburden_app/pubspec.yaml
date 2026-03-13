@@ -30,7 +30,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/brands/unburden/
-    - assets/brands/clientdemo/
     - assets/fonts/
   fonts:
     - family: Comfortaa
