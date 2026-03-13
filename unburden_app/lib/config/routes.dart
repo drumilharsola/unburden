@@ -80,7 +80,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         final intent = state.uri.queryParameters['intent'];
         return OnboardingScreen(intent: intent);
       }),
-      GoRoute(path: '/verify', builder: (_, __) => const VerifyScreen()),
+      GoRoute(path: '/verify', builder: (_, state) {
+        final resetToken = state.uri.queryParameters['reset_token'];
+        return VerifyScreen(resetToken: resetToken);
+      }),
       GoRoute(path: '/verify-email', builder: (_, state) {
         final token = state.uri.queryParameters['token'] ?? '';
         return VerifyEmailScreen(token: token);

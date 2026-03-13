@@ -137,7 +137,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           if (_step < 3) {
                             _goTo(_step + 1);
                           } else {
-                            context.go('/verify');
+                            context.go('/lobby');
                           }
                         },
                       ),

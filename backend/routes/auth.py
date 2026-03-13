@@ -356,3 +356,72 @@ async def get_user_profile(username: str, payload: dict = Depends(require_auth))
         "listen_count": int(profile.get("listen_count", 0)),
         "member_since": profile.get("created_at", ""),
     }
+
+
+# ─── Password Reset ──────────────────────────────────────────────────────────
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def strong_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return v
+
+
+@router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
+async def forgot_password(body: ForgotPasswordRequest):
+    """Send a password reset link. Always returns 202 to avoid email enumeration."""
+    redis = await get_redis()
+    email = body.email.lower().strip()
+    email_hash = get_email_hash(email)
+
+    session_id = await redis.get(f"email_account:{email_hash}")
+    if not session_id:
+        # Don't reveal whether the email exists
+        return {"message": "If an account exists, a reset link has been sent."}
+
+    # Rate limit: 1 reset email per 2 minutes
+    throttle_key = f"pwd_reset_throttle:{session_id}"
+    if await redis.exists(throttle_key):
+        return {"message": "If an account exists, a reset link has been sent."}
+    await redis.setex(throttle_key, 120, "1")
+
+    token = secrets.token_urlsafe(32)
+    await redis.setex(f"pwd_reset_token:{token}", 3600, session_id)  # 1 hour
+
+    settings = get_settings()
+    reset_url = f"{settings.APP_BASE_URL.rstrip('/')}/verify?reset_token={token}"
+
+    try:
+        from services.email import send_password_reset_email
+        await send_password_reset_email(email, reset_url)
+    except Exception:
+        logger.warning("Failed to send password reset email to %s", email)
+
+    return {"message": "If an account exists, a reset link has been sent."}
+
+
+@router.post("/reset-password")
+async def reset_password(body: ResetPasswordRequest):
+    """Reset password using a valid token."""
+    redis = await get_redis()
+    session_id = await redis.get(f"pwd_reset_token:{body.token}")
+    if not session_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reset link is invalid or has expired",
+        )
+
+    await redis.delete(f"pwd_reset_token:{body.token}")
+    pwd_hash = _pwd_ctx.hash(body.new_password)
+    await redis.set(f"pwd:{session_id}", pwd_hash)
+
+    return {"message": "Password has been reset. You can now sign in."}

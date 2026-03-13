@@ -95,6 +95,18 @@ class ApiClient {
     } catch (e) { _rethrow(e); }
   }
 
+  Future<void> forgotPassword(String email) async {
+    try {
+      await _dio.post('/auth/forgot-password', data: {'email': email});
+    } catch (e) { _rethrow(e); }
+  }
+
+  Future<void> resetPassword(String token, String newPassword) async {
+    try {
+      await _dio.post('/auth/reset-password', data: {'token': token, 'new_password': newPassword});
+    } catch (e) { _rethrow(e); }
+  }
+
   Future<ProfileSetupResponse> setProfile(String token, {required String dob, required int avatarId}) async {
     try {
       final res = await _dio.post('/auth/profile',

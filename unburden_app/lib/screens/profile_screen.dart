@@ -84,7 +84,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       final dobStr = '${_dob!.year}-${_dob!.month.toString().padLeft(2, '0')}-${_dob!.day.toString().padLeft(2, '0')}';
       final res = await ref.read(apiClientProvider).setProfile(token, dob: dobStr, avatarId: _setupAvatarId);
       await ref.read(authProvider.notifier).setProfile(res.username, res.avatarId);
-      if (mounted) context.go('/lobby');
+      if (mounted) context.go('/onboarding');
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {

@@ -280,7 +280,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           return _buildMarker(item);
         }
         if (item is TranscriptMessage) {
-          final isMe = chat.peerUsername != null ? item.from != chat.peerUsername : item.from == auth.username;
+          final isMe = chat.peerUsername != null && chat.peerUsername!.isNotEmpty
+              ? item.from != chat.peerUsername
+              : item.from == auth.username;
           return _buildBubble(item, isMe);
         }
         return const SizedBox.shrink();
@@ -365,6 +367,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     controller: _inputCtrl,
                     maxLines: 4,
                     minLines: 1,
+                    textInputAction: TextInputAction.send,
                     enabled: !disabled,
                     style: AppTypography.body(fontSize: 14, color: AppColors.ink),
                     decoration: InputDecoration(

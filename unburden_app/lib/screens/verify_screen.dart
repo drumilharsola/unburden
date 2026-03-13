@@ -13,10 +13,11 @@ import '../widgets/orb_background.dart';
 import '../widgets/pill.dart';
 import '../widgets/wellbeing_poster.dart';
 
-enum _Mode { login, register, checkEmail }
+enum _Mode { login, register, checkEmail, forgotPassword, resetPassword }
 
 class VerifyScreen extends ConsumerStatefulWidget {
-  const VerifyScreen({super.key});
+  final String? resetToken;
+  const VerifyScreen({super.key, this.resetToken});
 
   @override
   ConsumerState<VerifyScreen> createState() => _VerifyScreenState();
@@ -33,6 +34,13 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
   bool _resendDone = false;
   String? _pendingToken;
   late int _quoteIndex;
+  // Forgot password
+  bool _forgotSent = false;
+  // Reset password
+  String? _resetToken;
+  final _newPassCtrl = TextEditingController();
+  final _newConfirmCtrl = TextEditingController();
+  bool _resetSuccess = false;
 
   static const _quotes = [
     ('"Give sorrow words; the grief that does not speak whispers the o\'er-fraught heart, and bids it break."', 'William Shakespeare · Macbeth'),
@@ -60,6 +68,12 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
     _emailCtrl.addListener(_handleFieldUpdate);
     _passCtrl.addListener(_handleFieldUpdate);
     _confirmCtrl.addListener(_handleFieldUpdate);
+    _newPassCtrl.addListener(_handleFieldUpdate);
+    _newConfirmCtrl.addListener(_handleFieldUpdate);
+    if (widget.resetToken != null && widget.resetToken!.isNotEmpty) {
+      _resetToken = widget.resetToken;
+      _mode = _Mode.resetPassword;
+    }
   }
 
   @override
@@ -67,9 +81,13 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
     _emailCtrl.removeListener(_handleFieldUpdate);
     _passCtrl.removeListener(_handleFieldUpdate);
     _confirmCtrl.removeListener(_handleFieldUpdate);
+    _newPassCtrl.removeListener(_handleFieldUpdate);
+    _newConfirmCtrl.removeListener(_handleFieldUpdate);
     _emailCtrl.dispose();
     _passCtrl.dispose();
     _confirmCtrl.dispose();
+    _newPassCtrl.dispose();
+    _newConfirmCtrl.dispose();
     super.dispose();
   }
 
@@ -85,7 +103,39 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
       _error = null;
       _passCtrl.clear();
       _confirmCtrl.clear();
+      _newPassCtrl.clear();
+      _newConfirmCtrl.clear();
+      _forgotSent = false;
+      _resetSuccess = false;
     });
+  }
+
+  Future<void> _handleForgotPassword() async {
+    setState(() { _error = null; _loading = true; });
+    try {
+      await ref.read(apiClientProvider).forgotPassword(_emailCtrl.text.trim().toLowerCase());
+      setState(() => _forgotSent = true);
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _handleResetPassword() async {
+    if (_newPassCtrl.text != _newConfirmCtrl.text) {
+      setState(() => _error = "Passwords don't match");
+      return;
+    }
+    setState(() { _error = null; _loading = true; });
+    try {
+      await ref.read(apiClientProvider).resetPassword(_resetToken!, _newPassCtrl.text);
+      setState(() => _resetSuccess = true);
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _handleLogin() async {
@@ -216,6 +266,8 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
       _Mode.login => PosterMood.balance,
       _Mode.register => PosterMood.listening,
       _Mode.checkEmail => PosterMood.grounding,
+      _Mode.forgotPassword => PosterMood.balance,
+      _Mode.resetPassword => PosterMood.balance,
     };
 
     return Padding(
@@ -226,17 +278,21 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
           FlowLogo(dark: true, onTap: () => context.go('/')),
           SizedBox(height: compact ? 20 : 28),
           WellbeingPoster(
-            eyebrow: _mode == _Mode.login ? 'WELCOME BACK' : _mode == _Mode.register ? 'NEW ROOM' : 'CHECK EMAIL',
+            eyebrow: _mode == _Mode.login ? 'WELCOME BACK' : _mode == _Mode.register ? 'NEW ROOM' : _mode == _Mode.forgotPassword || _mode == _Mode.resetPassword ? 'RESET PASSWORD' : 'CHECK EMAIL',
             title: _mode == _Mode.login
                 ? 'Return to a quieter corner of the internet.'
                 : _mode == _Mode.register
                     ? 'Build a care account that feels human from the first tap.'
-                    : 'Open the link, then step back in when you are ready.',
+                    : _mode == _Mode.forgotPassword || _mode == _Mode.resetPassword
+                        ? 'Let\u2019s get you back in.'
+                        : 'Open the link, then step back in when you are ready.',
             subtitle: _mode == _Mode.login
                 ? 'The redesign uses custom poster scenes to reduce the coldness of account screens.'
                 : _mode == _Mode.register
                     ? 'A more expressive sign-up flow makes emotional safety visible instead of implied.'
-                    : 'Verification now lives inside the same visual system instead of a generic utility screen.',
+                    : _mode == _Mode.forgotPassword || _mode == _Mode.resetPassword
+                        ? 'A gentle path back to your quiet corner.'
+                        : 'Verification now lives inside the same visual system instead of a generic utility screen.',
             mood: mood,
             compact: compact,
           ),
@@ -292,6 +348,8 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
                 if (_mode == _Mode.login) _loginForm(),
                 if (_mode == _Mode.register) _registerForm(),
                 if (_mode == _Mode.checkEmail) _checkEmailView(),
+                if (_mode == _Mode.forgotPassword) _forgotPasswordForm(),
+                if (_mode == _Mode.resetPassword) _resetPasswordForm(),
               ],
             ),
           ),
@@ -305,6 +363,8 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
       _Mode.login => 1,
       _Mode.register => 2,
       _Mode.checkEmail => 3,
+      _Mode.forgotPassword => 1,
+      _Mode.resetPassword => 2,
     };
 
     return Row(
@@ -390,6 +450,13 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
           onPressed: canSubmit && !_loading ? _handleLogin : null,
           expand: true,
           loading: _loading,
+        ),
+        const SizedBox(height: 12),
+        Center(
+          child: GestureDetector(
+            onTap: () => _switchMode(_Mode.forgotPassword),
+            child: Text('Forgot password?', style: AppTypography.ui(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.accent)),
+          ),
         ),
         const SizedBox(height: 18),
         Center(
@@ -524,6 +591,114 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
           expand: true,
           loading: _resendLoading,
         ),
+      ],
+    );
+  }
+
+  Widget _forgotPasswordForm() {
+    final canSubmit = _emailCtrl.text.contains('@');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Pill(text: 'FORGOT PASSWORD', variant: PillVariant.plain),
+        const SizedBox(height: 16),
+        Text('Reset your\npassword.', style: AppTypography.heading(fontSize: 46)),
+        const SizedBox(height: 8),
+        Text('Enter your email and we\u2019ll send you a link to reset your password.', style: AppTypography.body(fontSize: 15, color: AppColors.graphite)),
+        const SizedBox(height: 28),
+        if (!_forgotSent) ...[
+          FlowInput(
+            label: 'Email',
+            placeholder: 'you@example.com',
+            controller: _emailCtrl,
+            keyboardType: TextInputType.emailAddress,
+            autofocus: true,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) { if (canSubmit) _handleForgotPassword(); },
+          ),
+          const SizedBox(height: 14),
+          _errorBanner(),
+          FlowButton(
+            label: _loading ? 'Sending…' : 'Send reset link →',
+            onPressed: canSubmit && !_loading ? _handleForgotPassword : null,
+            expand: true,
+            loading: _loading,
+          ),
+        ] else ...[
+          Container(
+            width: 56, height: 56,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              color: AppColors.flow1,
+              border: Border.all(color: AppColors.ink, width: 1.4),
+            ),
+            alignment: Alignment.center,
+            child: const Text('✉️', style: TextStyle(fontSize: 24)),
+          ),
+          const SizedBox(height: 20),
+          Text('Check your inbox.', style: AppTypography.title(fontSize: 22)),
+          const SizedBox(height: 8),
+          Text('If an account exists for that email, we\u2019ve sent a reset link. It expires in 1 hour.', style: AppTypography.body(fontSize: 15, color: AppColors.graphite)),
+        ],
+        const SizedBox(height: 18),
+        Center(
+          child: GestureDetector(
+            onTap: () => _switchMode(_Mode.login),
+            child: Text('← Back to sign in', style: AppTypography.ui(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _resetPasswordForm() {
+    final canSubmit = _newPassCtrl.text.length >= 8 && _newConfirmCtrl.text.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Pill(text: 'RESET PASSWORD', variant: PillVariant.plain),
+        const SizedBox(height: 16),
+        Text('Choose a\nnew password.', style: AppTypography.heading(fontSize: 46)),
+        const SizedBox(height: 28),
+        if (!_resetSuccess) ...[
+          FlowInput(
+            label: 'New password',
+            placeholder: 'At least 8 characters',
+            controller: _newPassCtrl,
+            obscureText: true,
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_) {},
+          ),
+          const SizedBox(height: 14),
+          FlowInput(
+            label: 'Confirm new password',
+            placeholder: '••••••••',
+            controller: _newConfirmCtrl,
+            obscureText: true,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) { if (canSubmit) _handleResetPassword(); },
+          ),
+          const SizedBox(height: 14),
+          _errorBanner(),
+          FlowButton(
+            label: _loading ? 'Resetting…' : 'Reset password →',
+            onPressed: canSubmit && !_loading ? _handleResetPassword : null,
+            expand: true,
+            loading: _loading,
+          ),
+        ] else ...[
+          Icon(Icons.check_circle_rounded, color: AppColors.success, size: 56),
+          const SizedBox(height: 16),
+          Text('Password reset!', style: AppTypography.title(fontSize: 22)),
+          const SizedBox(height: 8),
+          Text('You can now sign in with your new password.', style: AppTypography.body(fontSize: 15, color: AppColors.graphite)),
+          const SizedBox(height: 20),
+          FlowButton(
+            label: 'Sign in →',
+            onPressed: () => _switchMode(_Mode.login),
+            expand: true,
+          ),
+        ],
       ],
     );
   }
