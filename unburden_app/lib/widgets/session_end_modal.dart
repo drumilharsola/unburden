@@ -63,7 +63,7 @@ class SessionEndModal extends StatelessWidget {
               FlowButton(
                 label: 'Find a new match',
                 variant: FlowButtonVariant.ghost,
-                onPressed: () => context.go('/lobby'),
+                onPressed: () => context.go('/chats'),
                 expand: true,
               ),
               const SizedBox(height: 10),

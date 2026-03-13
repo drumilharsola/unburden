@@ -1,5 +1,6 @@
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../state/auth_provider.dart';
@@ -8,11 +9,9 @@ import '../screens/onboarding_screen.dart';
 import '../screens/verify_screen.dart';
 import '../screens/verify_email_screen.dart';
 import '../screens/profile_screen.dart';
-import '../screens/lobby_screen.dart';
-import '../screens/waiting_screen.dart';
+import '../screens/main_shell.dart';
 import '../screens/chat_screen.dart';
-import '../screens/history_screen.dart';
-import '../screens/board_screen.dart';
+import '../screens/unified_chat_screen.dart';
 import '../screens/not_found_screen.dart';
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_reports_screen.dart';
@@ -57,10 +56,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       final loggedIn = auth.isLoggedIn;
       final hasProfile = auth.hasProfile;
 
-      // If logged in with profile and on landing/verify/onboarding → go to lobby
+      // If logged in with profile and on landing/verify/onboarding → go to home
       if (loggedIn && hasProfile && (path == '/' || path == '/verify' || path == '/onboarding')) {
-        return '/lobby';
+        return '/home';
       }
+      // Legacy lobby redirect
+      if (path == '/lobby') return '/home';
 
       // Public routes - no redirect needed.
       const publicPaths = {'/', '/onboarding', '/verify', '/verify-email', '/brand', '/privacy', '/terms'};
@@ -90,29 +91,33 @@ final routerProvider = Provider<GoRouter>((ref) {
         return VerifyEmailScreen(token: token);
       }),
       GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
-      GoRoute(path: '/lobby', builder: (_, state) {
-        final requestId = state.uri.queryParameters['request_id'];
-        return LobbyScreen(requestId: requestId);
-      }),
-      GoRoute(path: '/waiting', builder: (_, state) {
-        final requestId = state.uri.queryParameters['request_id'] ?? '';
-        return WaitingScreen(requestId: requestId);
-      }),
+
+      // ── Main shell with bottom navigation ──
+      GoRoute(path: '/home', builder: (_, __) => const MainShell(initialIndex: 0)),
+      GoRoute(path: '/chats', builder: (_, __) => const MainShell(initialIndex: 1)),
+      GoRoute(path: '/help', builder: (_, __) => const MainShell(initialIndex: 2)),
+      GoRoute(path: '/me', builder: (_, __) => const MainShell(initialIndex: 3)),
+
+      // ── Full-screen routes (no bottom nav) ──
       GoRoute(path: '/chat', builder: (_, state) {
         final roomId = state.uri.queryParameters['room_id'] ?? '';
         final peerSessionId = state.uri.queryParameters['peer_session_id'] ?? '';
         return ChatScreen(roomId: roomId, peerSessionId: peerSessionId);
       }),
-      GoRoute(path: '/history', builder: (_, state) {
-        final tab = state.uri.queryParameters['tab'];
-        return HistoryScreen(tab: tab);
+      GoRoute(path: '/unified-chat', builder: (_, state) {
+        final peerSessionId = state.uri.queryParameters['peer_session_id'] ?? '';
+        final peerUsername = state.uri.queryParameters['peer_username'] ?? '';
+        return UnifiedChatScreen(peerSessionId: peerSessionId, peerUsername: peerUsername);
       }),
-      GoRoute(path: '/board', builder: (_, __) => const BoardScreen()),
+
+      // ── Admin ──
       GoRoute(path: '/admin', builder: (_, __) => const AdminDashboardScreen()),
       GoRoute(path: '/admin/analytics', builder: (_, __) => const AdminAnalyticsScreen()),
       GoRoute(path: '/admin/reports', builder: (_, __) => const AdminReportsScreen()),
       GoRoute(path: '/admin/users', builder: (_, __) => const AdminUserDetailScreen()),
       GoRoute(path: '/admin/tenants', builder: (_, __) => const AdminTenantsScreen()),
+
+      // ── Static pages ──
       GoRoute(path: '/privacy', builder: (_, __) => const PrivacyScreen()),
       GoRoute(path: '/terms', builder: (_, __) => const TermsScreen()),
     ],

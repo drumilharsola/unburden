@@ -164,7 +164,7 @@ class _WaitingScreenState extends ConsumerState<WaitingScreen> {
     if (token == null) return;
     try { await ref.read(apiClientProvider).cancelSpeak(token); } catch (_) {}
     _ws?.sink.close();
-    if (mounted) context.go('/lobby');
+    if (mounted) context.go('/home');
   }
 
   Future<void> _handleRetry() async {
@@ -207,9 +207,8 @@ class _WaitingScreenState extends ConsumerState<WaitingScreen> {
                     children: [
                       const FlowLogo(dark: true),
                       if (!_timedOut && !_loading)
-                        FlowButton(label: '← Lobby', variant: FlowButtonVariant.ghost, size: FlowButtonSize.sm, onPressed: () {
-                          final rid = Uri.encodeComponent(_requestId);
-                          context.go('/lobby?request_id=$rid');
+                        FlowButton(label: '← Back', variant: FlowButtonVariant.ghost, size: FlowButtonSize.sm, onPressed: () {
+                          context.go('/home');
                         }),
                     ],
                   ),
@@ -291,7 +290,7 @@ class _WaitingScreenState extends ConsumerState<WaitingScreen> {
           loading: _retrying,
         ),
         const SizedBox(height: 12),
-        FlowButton(label: 'Back to lobby', variant: FlowButtonVariant.ghost, onPressed: () => context.go('/lobby')),
+        FlowButton(label: 'Back to home', variant: FlowButtonVariant.ghost, onPressed: () => context.go('/home')),
       ],
     );
   }

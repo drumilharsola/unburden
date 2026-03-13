@@ -7,7 +7,6 @@ import '../config/theme.dart';
 
 import '../services/avatars.dart';
 import '../state/auth_provider.dart';
-import '../widgets/flow_logo.dart';
 import '../widgets/flow_button.dart';
 import '../widgets/orb_background.dart';
 import '../widgets/warm_card.dart';
@@ -271,14 +270,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              FlowLogo(onTap: () => context.go('/lobby')),
-              const Spacer(),
-              FlowButton(label: '← Lobby', variant: FlowButtonVariant.ghost, size: FlowButtonSize.sm, onPressed: () => context.go('/lobby')),
-            ],
-          ),
-          const SizedBox(height: 40),
+          const SizedBox(height: 16),
           Center(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(AppRadii.full),
@@ -403,6 +395,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   child: const Text('Terms of Service', style: TextStyle(fontSize: 12)),
                 ),
               ],
+            ),
+            const SizedBox(height: 24),
+            Divider(color: AppColors.border),
+            const SizedBox(height: 16),
+            Center(
+              child: FlowButton(
+                label: 'Sign out',
+                variant: FlowButtonVariant.ghost,
+                onPressed: () {
+                  ref.read(authProvider.notifier).clear();
+                  context.go('/');
+                },
+              ),
             ),
             if (_showDeleteConfirm) ...[
               const SizedBox(height: 16),

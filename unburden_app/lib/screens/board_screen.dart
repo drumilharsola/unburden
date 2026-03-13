@@ -205,7 +205,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
         scrolledUnderElevation: 1,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.go('/lobby'),
+          onPressed: () => context.go('/chats'),
         ),
         title: Text('People who need a listener', style: AppTypography.title(fontSize: 18)),
         actions: [

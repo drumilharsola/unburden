@@ -75,7 +75,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
         scrolledUnderElevation: 1,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.go('/lobby'),
+          onPressed: () => context.go('/chats'),
         ),
         title: Text('Conversations', style: AppTypography.title(fontSize: 20)),
       ),

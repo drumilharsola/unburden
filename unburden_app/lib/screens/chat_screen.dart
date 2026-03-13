@@ -35,6 +35,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   bool _confirmingBlock = false;
   bool _blocking = false;
   bool _blocked = false;
+  bool _safetyShown = false;
   TranscriptMessage? _replyTo;
 
   @override
@@ -69,15 +70,95 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _handleBlock() async {
     final token = ref.read(authProvider).token;
     final chat = ref.read(chatProvider(widget.roomId));
-    if (token == null || chat.peerSessionId == null || _blocking || _blocked) return;
+    if (token == null || _blocking || _blocked) return;
+    if (chat.peerSessionId == null || chat.peerSessionId!.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cannot block: peer information missing')),
+        );
+      }
+      return;
+    }
     setState(() => _blocking = true);
     try {
       await ref.read(apiClientProvider).blockUser(token, chat.peerSessionId!, chat.peerUsername ?? '', chat.peerAvatarId);
       setState(() => _blocked = true);
-      if (mounted) context.go('/lobby');
-    } catch (_) {} finally {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('User blocked')),
+        );
+        context.go('/chats');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to block: $e')),
+        );
+      }
+    } finally {
       if (mounted) setState(() => _blocking = false);
     }
+  }
+
+  void _showSafetyDialogIfNeeded(ChatState chat) {
+    if (_safetyShown) return;
+    if (chat.mode != 'live') return;
+    // Show only when no messages yet (new session)
+    final hasMessages = chat.transcript.any((t) => t is TranscriptMessage);
+    if (hasMessages) {
+      _safetyShown = true;
+      return;
+    }
+    _safetyShown = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: AppRadii.lgAll),
+          title: Row(
+            children: [
+              Icon(Icons.shield_outlined, color: AppColors.accent, size: 24),
+              const SizedBox(width: 10),
+              Text('Before you begin', style: AppTypography.title(fontSize: 20)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('This is a safe, anonymous space. To keep it that way:',
+                  style: AppTypography.body(fontSize: 14, color: AppColors.graphite)),
+              const SizedBox(height: 14),
+              _safetyRule(Icons.person_off_outlined, 'Do not share personal details (name, location, socials).'),
+              const SizedBox(height: 10),
+              _safetyRule(Icons.block, 'No hate speech, harassment, or abusive language.'),
+              const SizedBox(height: 10),
+              _safetyRule(Icons.favorite_border, 'Be kind and respectful — the other person is human too.'),
+            ],
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.accent),
+              child: Text('I understand', style: AppTypography.ui(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.white)),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  static Widget _safetyRule(IconData icon, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: AppColors.slate),
+        const SizedBox(width: 8),
+        Expanded(child: Text(text, style: AppTypography.body(fontSize: 13, color: AppColors.ink))),
+      ],
+    );
   }
 
   @override
@@ -88,6 +169,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     // Auto-scroll on new messages
     _scrollToBottom();
+
+    // Show safety dialog on new live chat
+    _showSafetyDialogIfNeeded(chat);
 
     return Scaffold(
       backgroundColor: AppColors.snow,
@@ -124,7 +208,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               peerSessionId: chat.peerSessionId,
               roomId: widget.roomId,
               onClose: () => setState(() => _showPeerProfile = false),
-              onBlocked: () { setState(() => _showPeerProfile = false); context.go('/lobby'); },
+              onBlocked: () { setState(() => _showPeerProfile = false); context.go('/chats'); },
             ),
         ],
       ),
@@ -148,7 +232,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             // Back button
             IconButton(
               icon: Icon(Icons.arrow_back_rounded, size: 20, color: AppColors.ink),
-              onPressed: () => context.go('/lobby'),
+              onPressed: () => context.go('/chats'),
             ),
             const SizedBox(width: 4),
 
@@ -222,7 +306,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 label: 'Leave',
                 variant: FlowButtonVariant.danger,
                 size: FlowButtonSize.sm,
-                onPressed: () { notifier.leave(); context.go('/lobby'); },
+                onPressed: () { notifier.leave(); context.go('/chats'); },
               ),
             ],
           ],
@@ -514,7 +598,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 onPressed: _blocking || _blocked || chat.peerSessionId == null ? null : () => setState(() => _confirmingBlock = true),
               ),
               const SizedBox(width: 8),
-              FlowButton(label: '← Back to lobby', variant: FlowButtonVariant.ghost, size: FlowButtonSize.sm, onPressed: () => context.go('/lobby')),
+              FlowButton(label: '← Back', variant: FlowButtonVariant.ghost, size: FlowButtonSize.sm, onPressed: () => context.go('/chats')),
               const SizedBox(width: 8),
               FlowButton(label: 'Report', variant: FlowButtonVariant.ghost, size: FlowButtonSize.sm, onPressed: () => setState(() => _showReport = true)),
             ],

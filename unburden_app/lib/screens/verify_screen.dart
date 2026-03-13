@@ -153,8 +153,8 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
         final me = await api.getMe(res.token);
         debugPrint('[LOGIN] got me: ${me.username}');
         await auth.setProfile(me.username, me.avatarId);
-        debugPrint('[LOGIN] navigating to /lobby, mounted=$mounted');
-        if (mounted) context.go('/lobby');
+        debugPrint('[LOGIN] navigating to /home, mounted=$mounted');
+        if (mounted) context.go('/home');
       } else {
         debugPrint('[LOGIN] no profile, navigating to /profile, mounted=$mounted');
         if (mounted) context.go('/profile');

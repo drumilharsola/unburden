@@ -83,7 +83,7 @@ class LandingScreen extends ConsumerWidget {
                                 if (authed)
                                   FlowButton(
                                     label: 'Enter the room',
-                                    onPressed: () => context.go('/lobby'),
+                                    onPressed: () => context.go('/home'),
                                     icon: Icons.arrow_outward_rounded,
                                   )
                                 else

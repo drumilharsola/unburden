@@ -34,6 +34,12 @@ class _WaitingOverlayState extends ConsumerState<WaitingOverlay> {
 
     if (!wait.isWaiting) return const SizedBox.shrink();
 
+    // Hide overlay when on the chats tab (bottom sheet handles waiting there)
+    final location = GoRouterState.of(context).uri.path;
+    if (location == '/chats' || location == '/waiting') {
+      return const SizedBox.shrink();
+    }
+
     return Positioned(
       left: _position.dx.clamp(0.0, size.width - 200),
       top: _position.dy.clamp(0.0, size.height - 80),
@@ -83,7 +89,7 @@ class _WaitingOverlayState extends ConsumerState<WaitingOverlay> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           GestureDetector(
-                            onTap: () => context.go('/waiting?request_id=${Uri.encodeComponent(wait.requestId!)}'),
+                            onTap: () => context.go('/chats'),
                             child: Icon(Icons.open_in_full_rounded, size: 16, color: Colors.white54),
                           ),
                           const SizedBox(width: 10),
