@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
-    SMTP_FROM: str = "UNBurDEN <noreply@UNBurDEN.app>"
+    SMTP_FROM: str = "Unburden <dhruharsola@gmail.com>"
 
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_HOURS: int = 168

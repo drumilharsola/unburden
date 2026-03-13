@@ -305,7 +305,7 @@ class _PostsScreenState extends ConsumerState<PostsScreen> {
                           padding: const EdgeInsets.all(32),
                           children: [
                             const SizedBox(height: 48),
-                            Icon(Icons.forum_rounded,
+                            Icon(Icons.eco_rounded,
                                 size: 48, color: AppColors.mist),
                             const SizedBox(height: 16),
                             Text(
