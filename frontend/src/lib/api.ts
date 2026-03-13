@@ -90,6 +90,16 @@ export interface BlockedUser {
   blocked_at: string;
 }
 
+export interface Post {
+  post_id: string;
+  text: string;
+  username: string;
+  avatar_id: number;
+  session_id: string;
+  created_at: number;
+  expires_at: number;
+}
+
 export const api = {
   register: (email: string, password: string) =>
     request<{ token: string; session_id: string; has_profile: boolean; email_verified: boolean }>(
@@ -190,6 +200,15 @@ export const api = {
       token
     ),
 
+  // Posts
+  getPosts: () =>
+    request<{ posts: Post[] }>("/posts", {}),
+
+  createPost: (token: string, text: string) =>
+    request<{ post: Post }>("/posts", { method: "POST", body: JSON.stringify({ text }) }, token),
+
+  deletePost: (token: string, postId: string) =>
+    request<void>(`/posts/${encodeURIComponent(postId)}`, { method: "DELETE" }, token),
 };
 
 export const wsUrl = {

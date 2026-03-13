@@ -39,7 +39,7 @@ type WsEvent =
   | { type: "session_end"; room_id?: string }
   | { type: "peer_left"; room_id?: string }
   | { type: "extended"; remaining: number; room_id?: string }
-  | { type: "error"; detail: string };
+  | { type: "error"; detail: string; code?: string };
 
 function ChatContent() {
   const router = useRouter();
@@ -68,6 +68,7 @@ function ChatContent() {
   const [confirmingBlock, setConfirmingBlock] = useState(false);
   const [connected, setConnected] = useState(false);
   const [connectionError, setConnectionError] = useState("");
+  const [inputError, setInputError] = useState("");
   const [mode, setMode] = useState<"checking" | "live" | "readonly" | "expired">("checking");
   const [showPeerProfile, setShowPeerProfile] = useState(false);
 
@@ -322,7 +323,11 @@ function ChatContent() {
           break;
 
         case "error":
-          setConnectionError(data.detail);
+          if (data.code === "moderation_block") {
+            setInputError("Message blocked — please keep the conversation respectful.");
+          } else {
+            setConnectionError(data.detail);
+          }
           break;
       }
     };
@@ -400,6 +405,7 @@ function ChatContent() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
+    if (inputError) setInputError("");
     const ws = wsRef.current;
     if (!ws) return;
     if (!isTypingRef.current) {
@@ -732,6 +738,11 @@ function ChatContent() {
               ↑
             </button>
           </div>
+          {inputError && (
+            <p style={{ textAlign: "center", fontSize: 12, color: "var(--danger)", marginTop: 6, fontFamily: "var(--font-ui)" }}>
+              {inputError}
+            </p>
+          )}
           <p style={{ textAlign: "center", fontSize: 10, color: "var(--graphite)", marginTop: 6, fontFamily: "var(--font-ui)" }}>
             Enter to send · Shift+Enter for new line · Leave any time
           </p>

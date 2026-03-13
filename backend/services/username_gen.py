@@ -38,25 +38,30 @@ def generate_username() -> str:
     return f"{adjective}{animal}"
 
 
-async def generate_unique_username(redis) -> str:
-    """Generate a username not currently in use by an active session."""
+async def generate_unique_username(redis=None) -> str:
+    """Generate a username not currently in use (checks Postgres profiles table)."""
+    from sqlalchemy import select
+    from db.postgres_client import get_session_factory
+    from db.models import Profile
+
+    factory = get_session_factory()
     for _ in range(20):
         username = generate_username()
-        # Check if username is active in Redis
-        key = f"username:{username}"
-        if not await redis.exists(key):
-            return username
+        async with factory() as db:
+            result = await db.execute(select(Profile).where(Profile.username == username))
+            if result.scalar_one_or_none() is None:
+                return username
     # Fallback: append a random number if all checked are taken
     username = generate_username()
     suffix = random.randint(10, 99)
     return f"{username}{suffix}"
 
 
-async def reserve_username(redis, username: str, session_id: str) -> None:
-    """Persist the username -> session mapping for stable profile lookups."""
-    await redis.set(f"username:{username}", session_id)
+async def reserve_username(redis=None, username: str = "", session_id: str = "") -> None:
+    """No-op — username uniqueness is enforced by Postgres unique constraint."""
+    pass
 
 
-async def release_username(redis, username: str) -> None:
-    """Free username when session ends."""
-    await redis.delete(f"username:{username}")
+async def release_username(redis=None, username: str = "") -> None:
+    """No-op — usernames are tied to profiles in Postgres."""
+    pass

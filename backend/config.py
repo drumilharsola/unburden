@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     APP_BASE_URL: str = "http://localhost:3000"
 
     REDIS_URL: str = "redis://localhost:6379/0"
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/unburden"
     RESEND_API_KEY: str = ""
 
     SMTP_HOST: str = "smtp.gmail.com"
@@ -27,7 +28,9 @@ class Settings(BaseSettings):
 
     GEO_API_URL: str = "http://ip-api.com/json/"
 
-    # Turn this on in production once you want to require email verification for anchors
+    WAIT_WINDOW_MINUTES: int = 10
+
+    # Turn this on in production once you want to require email verification for listeners
     REQUIRE_EMAIL_VERIFICATION: bool = False
 
     ALLOWED_ORIGINS: str = "http://localhost:3000"

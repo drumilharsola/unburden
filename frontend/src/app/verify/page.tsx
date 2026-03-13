@@ -384,7 +384,7 @@ function VerifyContent() {
 
               <h2 style={headingStyle}>Create<br />your account.</h2>
               <p style={{ fontSize: 14, fontWeight: 300, color: "var(--slate)", marginBottom: 40, lineHeight: 1.6, fontFamily: "var(--font-ui)" }}>
-                A verification link will be sent to your email so you can fully unlock the keeper role.
+                A verification link will be sent to your email so you can fully unlock the listener role.
               </p>
 
               <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -411,7 +411,7 @@ function VerifyContent() {
                 </button>
               </form>
 
-              <p style={{ textAlign: "center", fontSize: 11, color: "rgba(255,255,255,0.2)", marginTop: 20, fontFamily: "var(--font-ui)" }}>
+              <p style={{ textAlign: "center", fontSize: 13, color: "rgba(255,255,255,0.5)", marginTop: 20, fontFamily: "var(--font-ui)" }}>
                 By continuing you confirm you are 18 or older.
               </p>
               <p style={{ textAlign: "center", fontSize: 13, color: "var(--slate)", marginTop: 12, fontFamily: "var(--font-ui)" }}>
@@ -449,7 +449,7 @@ function VerifyContent() {
               <p style={{ fontSize: 14, fontWeight: 300, color: "var(--slate)", marginBottom: 12, lineHeight: 1.7, fontFamily: "var(--font-ui)" }}>
                 We sent a verification link to{" "}
                 <span style={{ color: "var(--fog)" }}>{email}</span>.
-                Click it to unlock the listner role.
+                Click it to unlock the listener role.
               </p>
               <p style={{ fontSize: 13, fontWeight: 300, color: "var(--slate)", marginBottom: 40, lineHeight: 1.6, fontFamily: "var(--font-ui)" }}>
                 You can still set up your profile and start venting in the meantime.

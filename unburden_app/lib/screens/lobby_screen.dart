@@ -416,6 +416,19 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
               Text(_ventLoading ? 'Finding your space…' : 'Let it out.', style: AppTypography.title(fontSize: 18, color: Colors.white)),
               const SizedBox(height: 6),
               Text('Open a private conversation and wait for one good listener to show up.', style: AppTypography.body(fontSize: 13, color: Colors.white70)),
+              if (_board.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFF4ade80), shape: BoxShape.circle)),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${_board.length} listener${_board.length != 1 ? "s" : ""} available now',
+                      style: AppTypography.body(fontSize: 12, color: Colors.white60),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),

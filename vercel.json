@@ -1,14 +1,9 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "unburden_app/build/web"
-      }
-    }
-  ],
+  "buildCommand": "bash build.sh",
+  "outputDirectory": "unburden_app/build/web",
+  "installCommand": "echo 'skip'",
+  "framework": null,
   "routes": [
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/index.html" }

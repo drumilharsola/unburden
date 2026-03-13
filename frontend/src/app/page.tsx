@@ -12,7 +12,7 @@ const MARQUEE_ITEMS = [
 
 const FEATURES = [
   { num: "01", title: "UNBurDEN yourself", desc: "Say what’s weighing on you without names, judgment, or consequences." },
-  { num: "02", title: "Be a steady presence", desc: "Show up for someone with calm attention. No advice needed." },
+  { num: "02", title: "Be a listener", desc: "Show up for someone with calm attention. No advice needed." },
   { num: "03", title: "15 minutes", desc: "Still enough to matter. Short enough to stay safe. The timer keeps it bounded." },
   { num: "04", title: "No trace", desc: "Sessions disappear. Words fade. Identity vanishes after 7 days." },
 ];

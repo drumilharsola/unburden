@@ -37,9 +37,10 @@ from services.session_token import decode_session_token
 from services.session import (
     get_profile, get_room, get_active_room_id_for_session,
     extend_room, close_room, append_message, get_messages,
-    get_room_history,
+    get_room_history, get_blocked_set,
     mark_room_message_started,
 )
+from services.moderation import check_content
 from middleware.jwt_auth import require_auth
 from db.redis_client import get_redis
 from config import get_settings
@@ -198,6 +199,14 @@ async def chat_ws(websocket: WebSocket, token: str = "", room_id: str = ""):
                 text = _sanitize(str(data.get("text", "")))
                 if not text:
                     continue
+                flagged, reason = await check_content(text)
+                if flagged:
+                    await websocket.send_json({
+                        "type": "error",
+                        "detail": "Message blocked: contains inappropriate content",
+                        "code": "moderation_block"
+                    })
+                    continue
                 client_id = str(data.get("client_id", "")).strip()
                 record = {
                     "type": "message",
@@ -273,7 +282,7 @@ async def list_chat_rooms(session: dict = Depends(require_auth)):
     session_id = session["sub"]
     redis = await get_redis()
     room_ids = await get_room_history(session_id)
-    blocked_ids = await redis.smembers(f"blocked:{session_id}")
+    blocked_ids = await get_blocked_set(session_id)
     rooms = []
     for rid in room_ids:
         room = await get_room(rid)

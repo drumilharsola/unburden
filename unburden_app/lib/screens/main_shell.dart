@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../config/theme.dart';
 import 'home_screen.dart';
 import 'conversations_screen.dart';
+import 'posts_screen.dart';
 import 'help_screen.dart';
 import 'profile_screen.dart';
 
@@ -25,7 +26,7 @@ class MainShellState extends State<MainShell> {
   }
 
   void switchTab(int index) {
-    if (index >= 0 && index < 4) {
+    if (index >= 0 && index < 5) {
       setState(() => _currentIndex = index);
     }
   }
@@ -45,6 +46,7 @@ class MainShellState extends State<MainShell> {
           children: const [
             HomeScreen(),
             ConversationsScreen(),
+            PostsScreen(),
             HelpScreen(),
             ProfileScreen(),
           ],
@@ -74,6 +76,11 @@ class MainShellState extends State<MainShell> {
               BottomNavigationBarItem(
                 icon: Icon(Icons.chat_bubble_rounded),
                 activeIcon: Icon(Icons.chat_bubble_rounded),
+                label: '',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.forum_rounded),
+                activeIcon: Icon(Icons.forum_rounded),
                 label: '',
               ),
               BottomNavigationBarItem(

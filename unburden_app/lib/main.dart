@@ -5,6 +5,7 @@ import 'config/brand.dart';
 import 'config/routes.dart';
 import 'config/theme.dart';
 import 'state/auth_provider.dart';
+import 'widgets/waiting_overlay.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,6 +55,14 @@ class _UnburdenAppState extends ConsumerState<UnburdenApp> {
       debugShowCheckedModeBanner: false,
       theme: theme,
       routerConfig: router,
+      builder: (context, child) {
+        return Stack(
+          children: [
+            child!,
+            const WaitingOverlay(),
+          ],
+        );
+      },
     );
   }
 }

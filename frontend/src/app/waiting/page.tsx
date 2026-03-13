@@ -8,7 +8,7 @@ import { FlowLogo } from "@/components/FlowLogo";
 import { Timer } from "@/components/Timer";
 
 
-const WAIT_WINDOW_SECONDS = 5 * 60;
+const WAIT_WINDOW_SECONDS = 10 * 60;
 
 function WaitingInner() {
   const router = useRouter();
@@ -225,7 +225,7 @@ function WaitingInner() {
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
           <Timer remainingSeconds={remaining} onEnd={() => { void handleTimeout(); }} />
           <p style={{ margin: 0, fontSize: 12, color: "var(--mist)", fontFamily: "var(--font-ui)" }}>
-            Most connections happen sooner than 5 minutes.
+            Most connections happen within the first few minutes.
           </p>
           <p style={{ margin: 0, fontSize: 12, color: "var(--graphite)", fontFamily: "var(--font-ui)" }}>
             If time runs out, you can raise the request again.
@@ -333,23 +333,50 @@ function WaitingInner() {
           )}
 
           {timedOut ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, maxWidth: 360 }}>
-              <div style={{ padding: "18px 20px", borderRadius: "var(--r-lg)", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                <p style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 600, color: "var(--white)", fontFamily: "var(--font-ui)" }}>
-                  No one has connected yet.
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, maxWidth: 400, width: "100%" }}>
+              <div style={{ padding: "20px 24px", borderRadius: "var(--r-lg)", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", width: "100%", textAlign: "center" }}>
+                <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 600, color: "var(--white)", fontFamily: "var(--font-ui)" }}>
+                  No one connected this time.
                 </p>
                 <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "var(--slate)", fontFamily: "var(--font-ui)" }}>
-                  You can raise the request again now, or head back to the lobby.
+                  That&apos;s okay — you still showed up for yourself. Listeners are most active in the evenings.
                 </p>
               </div>
+
+              {/* Journal fallback */}
+              <div style={{ width: "100%", padding: "18px 20px", borderRadius: "var(--r-lg)", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                <p style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--slate)", fontFamily: "var(--font-ui)" }}>
+                  Write it out — just for you
+                </p>
+                <textarea
+                  placeholder="Say what you wanted to say. No one sees this."
+                  style={{
+                    width: "100%", minHeight: 100, background: "transparent", border: "none",
+                    outline: "none", resize: "none", fontSize: 14, color: "var(--white)",
+                    fontFamily: "var(--font-ui)", lineHeight: 1.6, caretColor: "var(--accent)",
+                  }}
+                />
+              </div>
+
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
                 <button onClick={handleRetry} className="btn btn-sm btn-ghost" disabled={retrying}>
-                  {retrying ? "Raising request..." : "Raise request again"}
+                  {retrying ? "Raising request..." : "Try again →"}
                 </button>
                 <button onClick={() => router.push("/lobby")} className="btn btn-sm btn-ghost">
                   Back to lobby
                 </button>
               </div>
+
+              <p style={{ fontSize: 12, color: "var(--graphite)", fontFamily: "var(--font-ui)", textAlign: "center" }}>
+                If you&apos;re struggling right now, you&apos;re not alone.{" "}
+                <a href="https://iCall.iitb.ac.in" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>
+                  iCall (India)
+                </a>{" "}
+                ·{" "}
+                <a href="https://www.befrienders.org" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>
+                  Befrienders worldwide
+                </a>
+              </p>
             </div>
           ) : (
             <button

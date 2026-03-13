@@ -37,5 +37,8 @@ services:
       - key: APP_BASE_URL
         sync: false          
 
+      - key: DATABASE_URL
+        sync: false          # Render Postgres internal URL (postgresql+asyncpg://...)
+
       - key: ALLOWED_ORIGINS
         sync: false          # Same Vercel URL (comma-separated if multiple)

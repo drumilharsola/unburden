@@ -17,12 +17,14 @@ from slowapi.errors import RateLimitExceeded
 
 from config import get_settings
 from db.redis_client import close_redis, ping_redis
+from db.postgres_client import init_db, close_db
 from routes.auth import router as auth_router
 from routes.block import router as block_router
 from routes.board import router as board_router
 from routes.chat import router as chat_router
 from routes.matchmaking import router as match_router
 from routes.report import router as report_router
+from routes.posts import router as posts_router
 from services.matchmaker import start_matchmaker, stop_matchmaker
 
 logging.basicConfig(
@@ -42,11 +44,17 @@ async def lifespan(app: FastAPI):
         logger.info("Redis connection ready")
     except (RedisError, AsyncTimeoutError, OSError) as exc:
         logger.warning(f"Redis is unavailable during startup: {exc}")
+    try:
+        await init_db()
+        logger.info("PostgreSQL tables ready")
+    except Exception as exc:
+        logger.warning(f"PostgreSQL init failed: {exc}")
     start_matchmaker()
     yield
     # ── Shutdown ──────────────────────────────────────────────────────────────
     stop_matchmaker()
     await close_redis()
+    await close_db()
     logger.info("UNBurDEN shut down cleanly")
 
 
@@ -102,6 +110,7 @@ app.include_router(board_router)
 app.include_router(chat_router)
 app.include_router(match_router)
 app.include_router(report_router)
+app.include_router(posts_router)
 
 
 # ── Health ────────────────────────────────────────────────────────────────────

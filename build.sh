@@ -15,6 +15,13 @@ cd unburden_app
 $FLUTTER pub get
 
 echo "==> Building web..."
-$FLUTTER build web --release --dart-define=API_BASE_URL=${API_BASE_URL:-}
+$FLUTTER build web --release \
+  --dart-define=API_BASE_URL=${API_BASE_URL:-}
+
+# Fail loudly if Flutter didn't produce output
+if [ ! -f "build/web/index.html" ]; then
+  echo "ERROR: Flutter build did not produce build/web/index.html"
+  exit 1
+fi
 
 echo "==> Build complete!"

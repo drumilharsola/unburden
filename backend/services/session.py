@@ -1,14 +1,14 @@
 """
-Session service - manage user profile data, chat room state, and matchmaking
-entirely within Redis. Nothing is persisted to a SQL database.
+Session service - manage user profile data, chat room state, and matchmaking.
 
-Key schema:
-    profile:{session_id}     HASH  - username, avatar_id, age_verified, created_at, speak_count, listen_count
+Profile & block data → PostgreSQL (permanent).
+Room/message/queue data → Redis (ephemeral, TTL-based).
+
+Redis key schema (ephemeral only):
     room:{room_id}           HASH  - user_a, user_b, username_a, username_b, avatar_a, avatar_b, matched_at, started_at, status, extended
-  room:{room_id}:msgs      LIST  - JSON-encoded messages (TTL = 7 days after session end)
-  history:{session_id}     LIST  - room_ids newest-first (7-day TTL)
+    room:{room_id}:msgs      LIST  - JSON-encoded messages (TTL = 7 days after session end)
+    history:{session_id}     LIST  - room_ids newest-first (7-day TTL)
     active_rooms:{session_id} SET   - active room_ids for this session
-  username:{username}      STRING - session_id (active guard)
 """
 
 import json
@@ -16,15 +16,19 @@ import time
 import uuid
 from typing import Optional
 
+from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
 from db.redis_client import get_redis
+from db.postgres_client import get_session_factory
+from db.models import Profile, BlockedUser
 from config import get_settings
 
-PROFILE_TTL = 7 * 24 * 3600        # 7 days
 ROOM_TTL_ACTIVE = 7 * 24 * 3600 + 3600  # 7 days + 1h buffer while active
 ROOM_TTL_AFTER  = 7 * 24 * 3600        # 7 days for history
 
 
-# ─── Profile ──────────────────────────────────────────────────────────────────
+# ─── Profile (PostgreSQL) ─────────────────────────────────────────────────────
 
 async def save_profile(
     session_id: str,
@@ -32,35 +36,53 @@ async def save_profile(
     avatar_id: int = 0,
     age_verified: bool = True,
 ) -> None:
-    redis = await get_redis()
-    key = f"profile:{session_id}"
-    fields = {
-        "username": username,
-        "avatar_id": str(avatar_id),
-        "age_verified": "1" if age_verified else "0",
-        "created_at": str(int(time.time())),
-        "speak_count": "0",
-        "listen_count": "0",
-    }
-    pipe = redis.pipeline(transaction=False)
-    for f, v in fields.items():
-        pipe.hset(key, f, v)
-    # Only initialise email_verified to "0" if not already set -
-    # user may have clicked the verification link before completing profile setup.
-    pipe.hsetnx(key, "email_verified", "0")
-    await pipe.execute()
+    factory = get_session_factory()
+    async with factory() as db:
+        stmt = pg_insert(Profile).values(
+            session_id=session_id,
+            username=username,
+            avatar_id=avatar_id,
+            age_verified=age_verified,
+            email_verified=False,
+            speak_count=0,
+            listen_count=0,
+            created_at=int(time.time()),
+        ).on_conflict_do_update(
+            index_elements=["session_id"],
+            set_=dict(username=username, avatar_id=avatar_id),
+        )
+        await db.execute(stmt)
+        await db.commit()
 
 
 async def set_email_verified(session_id: str) -> None:
-    """Mark a session's email as verified in its profile hash."""
-    redis = await get_redis()
-    await redis.hset(f"profile:{session_id}", "email_verified", "1")
+    """Mark a session's email as verified in the profiles table."""
+    factory = get_session_factory()
+    async with factory() as db:
+        await db.execute(
+            update(Profile).where(Profile.session_id == session_id).values(email_verified=True)
+        )
+        await db.commit()
 
 
 async def get_profile(session_id: str) -> Optional[dict]:
-    redis = await get_redis()
-    data = await redis.hgetall(f"profile:{session_id}")
-    return data if data else None
+    factory = get_session_factory()
+    async with factory() as db:
+        result = await db.execute(
+            select(Profile).where(Profile.session_id == session_id)
+        )
+        row = result.scalar_one_or_none()
+        if not row:
+            return None
+        return {
+            "username": row.username,
+            "avatar_id": str(row.avatar_id),
+            "age_verified": "1" if row.age_verified else "0",
+            "email_verified": "1" if row.email_verified else "0",
+            "speak_count": str(row.speak_count),
+            "listen_count": str(row.listen_count),
+            "created_at": str(row.created_at),
+        }
 
 
 # ─── Room ─────────────────────────────────────────────────────────────────────
@@ -267,16 +289,31 @@ async def get_room_history(session_id: str) -> list[str]:
 
 
 async def increment_speak_count(session_id: str) -> None:
-    redis = await get_redis()
-    await redis.hincrby(f"profile:{session_id}", "speak_count", 1)
+    factory = get_session_factory()
+    async with factory() as db:
+        await db.execute(
+            update(Profile).where(Profile.session_id == session_id)
+            .values(speak_count=Profile.speak_count + 1)
+        )
+        await db.commit()
 
 
 async def increment_listen_count(session_id: str) -> None:
-    redis = await get_redis()
-    await redis.hincrby(f"profile:{session_id}", "listen_count", 1)
+    factory = get_session_factory()
+    async with factory() as db:
+        await db.execute(
+            update(Profile).where(Profile.session_id == session_id)
+            .values(listen_count=Profile.listen_count + 1)
+        )
+        await db.commit()
 
 
 async def get_blocked_set(session_id: str) -> set[str]:
     """Return the set of peer session_ids blocked by this session."""
-    redis = await get_redis()
-    return await redis.smembers(f"blocked:{session_id}")
+    factory = get_session_factory()
+    async with factory() as db:
+        result = await db.execute(
+            select(BlockedUser.blocked_session_id)
+            .where(BlockedUser.blocker_session_id == session_id)
+        )
+        return {row[0] for row in result.all()}

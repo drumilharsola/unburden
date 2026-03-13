@@ -15,7 +15,7 @@ import '../widgets/orb_background.dart';
 import '../widgets/timer_widget.dart';
 import '../widgets/breathing_circle.dart';
 
-const _waitWindowSeconds = 5 * 60;
+const _waitWindowSeconds = 10 * 60;
 
 class WaitingScreen extends ConsumerStatefulWidget {
   final String requestId;
@@ -257,7 +257,11 @@ class _WaitingScreenState extends ConsumerState<WaitingScreen>
                 label: '← Back',
                 variant: FlowButtonVariant.ghost,
                 size: FlowButtonSize.sm,
-                onPressed: _handleCancel,
+                onPressed: () {
+                  // Don't cancel — just go back to lobby with pending request
+                  _ws?.sink.close();
+                  context.go('/home?request_id=${Uri.encodeComponent(_requestId)}');
+                },
               ),
               TimerWidget(remainingSeconds: _remaining, onEnd: _handleTimeout),
             ],
@@ -368,10 +372,41 @@ class _WaitingScreenState extends ConsumerState<WaitingScreen>
           children: [
             Text('⏱', style: const TextStyle(fontSize: 48)),
             const SizedBox(height: 20),
-            Text("Time's up.", style: AppTypography.heading(fontSize: 28, color: AppColors.ink)),
-            const SizedBox(height: 10),
-            Text('No one joined this time. You can try again.', style: AppTypography.body(fontSize: 14, color: AppColors.slate), textAlign: TextAlign.center),
-            const SizedBox(height: 28),
+            Text("No one connected this time.", style: AppTypography.heading(fontSize: 24, color: AppColors.ink)),
+            const SizedBox(height: 8),
+            Text(
+              "That's okay — you still showed up for yourself. Listeners are most active in the evenings.",
+              style: AppTypography.body(fontSize: 14, color: AppColors.slate),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            // Journal fallback
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.lavender.withValues(alpha: 0.08),
+                borderRadius: AppRadii.lgAll,
+                border: Border.all(color: AppColors.lavender.withValues(alpha: 0.15)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('WRITE IT OUT — JUST FOR YOU', style: AppTypography.label(fontSize: 10, color: AppColors.lavender)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    maxLines: 4,
+                    decoration: InputDecoration(
+                      hintText: 'Say what you wanted to say. No one sees this.',
+                      hintStyle: AppTypography.body(fontSize: 13, color: AppColors.mist),
+                      border: InputBorder.none,
+                    ),
+                    style: AppTypography.body(fontSize: 14, color: AppColors.ink),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
             FlowButton(
               label: _retrying ? 'Raising hand…' : 'Try again →',
               onPressed: _retrying ? null : _handleRetry,
@@ -379,6 +414,12 @@ class _WaitingScreenState extends ConsumerState<WaitingScreen>
             ),
             const SizedBox(height: 12),
             FlowButton(label: 'Back to home', variant: FlowButtonVariant.ghost, onPressed: () => context.go('/home')),
+            const SizedBox(height: 20),
+            Text(
+              'If you\'re struggling right now, you\'re not alone. iCall: 9152987821',
+              style: AppTypography.body(fontSize: 12, color: AppColors.slate),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),

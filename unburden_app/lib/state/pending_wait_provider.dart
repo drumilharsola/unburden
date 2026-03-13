@@ -11,7 +11,7 @@ class PendingWaitState {
   final bool timedOut;
   final String? matchedRoomId;
 
-  const PendingWaitState({this.requestId, this.remaining = 300, this.timedOut = false, this.matchedRoomId});
+  const PendingWaitState({this.requestId, this.remaining = 600, this.timedOut = false, this.matchedRoomId});
 
   PendingWaitState copyWith({String? requestId, int? remaining, bool? timedOut, String? matchedRoomId, bool clearRequest = false, bool clearMatch = false}) {
     return PendingWaitState(
@@ -37,7 +37,7 @@ class PendingWaitNotifier extends StateNotifier<PendingWaitState> {
 
   String? get _token => ref.read(authProvider).token;
 
-  void startWaiting(String requestId, {int remaining = 300}) {
+  void startWaiting(String requestId, {int remaining = 600}) {
     state = PendingWaitState(requestId: requestId, remaining: remaining);
     _connectWs();
     _startPoll();
@@ -106,7 +106,7 @@ class PendingWaitNotifier extends StateNotifier<PendingWaitState> {
           return;
         }
         final elapsed = (DateTime.now().millisecondsSinceEpoch ~/ 1000) - (int.tryParse(req.postedAt!) ?? 0);
-        final rem = (300 - elapsed).clamp(0, 300);
+        final rem = (600 - elapsed).clamp(0, 600);
         if (rem <= 0) {
           state = state.copyWith(timedOut: true);
         } else {

@@ -247,6 +247,32 @@ class ApiClient {
     } catch (e) { _rethrow(e); }
   }
 
+  // ────────────────────────── POSTS ──────────────────────────
+
+  Future<List<Map<String, dynamic>>> getPosts() async {
+    try {
+      final res = await _dio.get('/posts');
+      final list = res.data['posts'] as List;
+      return list.cast<Map<String, dynamic>>();
+    } catch (e) { _rethrow(e); }
+  }
+
+  Future<Map<String, dynamic>> createPost(String token, String text) async {
+    try {
+      final res = await _dio.post('/posts',
+          data: {'text': text},
+          options: Options(headers: _authHeader(token)));
+      return res.data['post'] as Map<String, dynamic>;
+    } catch (e) { _rethrow(e); }
+  }
+
+  Future<void> deletePost(String token, String postId) async {
+    try {
+      await _dio.delete('/posts/${Uri.encodeComponent(postId)}',
+          options: Options(headers: _authHeader(token)));
+    } catch (e) { _rethrow(e); }
+  }
+
   // ────────────────────────── GDPR ──────────────────────────
 
   Future<Map<String, dynamic>> exportData(String token) async {

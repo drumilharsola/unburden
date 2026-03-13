@@ -23,6 +23,8 @@ class _ReportModalState extends ConsumerState<ReportModal> {
     ('spam', 'Spam'),
     ('hate_speech', 'Hate speech'),
     ('inappropriate_content', 'Inappropriate content'),
+    ('sharing_personal_info', 'Sharing personal information'),
+    ('self_harm', 'Self-harm or crisis content'),
     ('underage_suspected', 'Underage suspected'),
     ('other', 'Other'),
   ];

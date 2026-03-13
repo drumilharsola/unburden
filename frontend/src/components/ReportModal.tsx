@@ -9,6 +9,8 @@ const REASONS = [
   { value: "spam",                  label: "Spam" },
   { value: "hate_speech",           label: "Hate speech" },
   { value: "inappropriate_content", label: "Inappropriate content" },
+  { value: "sharing_personal_info", label: "Sharing personal information" },
+  { value: "self_harm",             label: "Self-harm or crisis content" },
   { value: "underage_suspected",    label: "Suspected underage user" },
   { value: "other",                 label: "Other" },
 ];

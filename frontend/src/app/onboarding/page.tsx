@@ -15,7 +15,7 @@ const STEPS = [
   {
     num: "02",
     icon: "🫂",
-    title: "Be an anchor.",
+    title: "Be a listener.",
     body: "You can choose to support someone instead. Your only job? Listen. No advice needed - just presence.",
   },
   {
@@ -72,7 +72,7 @@ function OnboardingContent() {
 
         <div style={{ marginBottom: 22, textAlign: "center", maxWidth: 540 }}>
           <span className="pill pill-accent" style={{ marginBottom: 14 }}>
-            {intent === "support" ? "Keeper path" : intent === "speak" ? "Sharer path" : "How Unburden works"}
+            {intent === "support" ? "Listener path" : intent === "speak" ? "Sharer path" : "How Unburden works"}
           </span>
           <h1 style={{
             fontFamily: "var(--font-display)",

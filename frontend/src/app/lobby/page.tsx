@@ -52,6 +52,18 @@ function groupRoomsByPeer(rooms: RoomSummary[]) {
   return Array.from(grouped.values());
 }
 
+// ─── Wellbeing tips ──────────────────────────────────────────────────────────
+
+const WELLBEING_TIPS = [
+  { emoji: "🧘", tip: "Take 3 slow breaths right now. In through your nose, out through your mouth." },
+  { emoji: "💧", tip: "Have you had water today? Dehydration amplifies anxiety." },
+  { emoji: "🚶", tip: "Even a 5-minute walk outside can shift your mental state meaningfully." },
+  { emoji: "✍️", tip: "Write down one thing that went okay today, however small." },
+  { emoji: "📵", tip: "Try putting your phone face-down for the next 20 minutes." },
+  { emoji: "🌙", tip: "Sleep is emotional regulation. Protecting your sleep is self-care." },
+  { emoji: "🤝", tip: "Asking for help is a form of courage, not weakness." },
+];
+
 // ─── Vent card ───────────────────────────────────────────────────────────────
 
 function VentCard({ req, onAccept, accepting, emailVerified }: {
@@ -271,7 +283,7 @@ function LobbyContent() {
           return;
         }
         const elapsed = Math.max(0, Math.floor(Date.now() / 1000) - Number(request.posted_at));
-        const nextRemaining = Math.max(0, 5 * 60 - elapsed);
+        const nextRemaining = Math.max(0, 10 * 60 - elapsed);
         setPendingRemaining(nextRemaining);
       })
       .catch(() => {
@@ -486,6 +498,15 @@ function LobbyContent() {
                     <p style={{ margin: "6px 0 0", fontSize: 13, color: "rgba(255,255,255,0.5)", lineHeight: 1.4, fontFamily: "var(--font-ui)", fontWeight: 300 }}>
                       Open a private room and wait for one good listener to show up.
                     </p>
+                    {board.length > 0 && (
+                      <span style={{
+                        fontSize: 11, color: "rgba(255,255,255,0.5)", fontFamily: "var(--font-ui)",
+                        display: "flex", alignItems: "center", gap: 5, marginTop: 8,
+                      }}>
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4ade80", display: "inline-block" }} />
+                        {board.length} listener{board.length !== 1 ? "s" : ""} available now
+                      </span>
+                    )}
                   </div>
                 </button>
 
@@ -554,16 +575,22 @@ function LobbyContent() {
             )}
             {board.length === 0 ? (
               <div style={{
-                borderRadius: "var(--r-md)", padding: "48px 24px", textAlign: "center",
-                border: "1.5px dashed rgba(0,0,0,0.1)",
-                background: "var(--white)",
+                borderRadius: "var(--r-md)", padding: "32px 20px", textAlign: "center",
+                border: "1.5px dashed rgba(0,0,0,0.1)", background: "var(--white)",
               }}>
-                <p style={{ margin: 0, fontWeight: 600, color: "var(--charcoal)", fontSize: 15, fontFamily: "var(--font-ui)" }}>
+                <p style={{ margin: "0 0 4px", fontWeight: 600, color: "var(--charcoal)", fontSize: 15, fontFamily: "var(--font-ui)" }}>
                   All quiet right now.
                 </p>
-                <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--slate)", fontFamily: "var(--font-ui)", fontWeight: 300 }}>
-                  Stay here and new requests will appear automatically.
+                <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--slate)", fontFamily: "var(--font-ui)", fontWeight: 300 }}>
+                  New requests appear automatically — no need to refresh.
                 </p>
+                <button
+                  onClick={() => router.push("/posts")}
+                  className="btn btn-sm"
+                  style={{ background: "none", border: "1px solid rgba(0,0,0,0.1)", color: "var(--charcoal)" }}
+                >
+                  Read the community board instead →
+                </button>
               </div>
             ) : (
               <div className="board-list" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -632,6 +659,32 @@ function LobbyContent() {
                   </div>
                 )}
               </div>
+
+              {/* Daily wellbeing tip */}
+              <div style={{ background: "rgba(184,164,244,0.08)", border: "1px solid rgba(184,164,244,0.15)", borderRadius: "var(--r-lg)", padding: "16px 18px" }}>
+                <p style={{ margin: 0, fontSize: 22, lineHeight: 1 }}>{WELLBEING_TIPS[new Date().getDate() % WELLBEING_TIPS.length].emoji}</p>
+                <p style={{ margin: "8px 0 0", fontSize: 13, color: "var(--charcoal)", fontFamily: "var(--font-ui)", lineHeight: 1.5, fontWeight: 300 }}>
+                  {WELLBEING_TIPS[new Date().getDate() % WELLBEING_TIPS.length].tip}
+                </p>
+              </div>
+
+              {/* Community board link */}
+              <button
+                onClick={() => router.push("/posts")}
+                style={{
+                  width: "100%", padding: "14px 18px", borderRadius: "var(--r-lg)",
+                  background: "rgba(255,255,255,0.8)", border: "1px solid rgba(0,0,0,0.08)",
+                  cursor: "pointer", textAlign: "left",
+                  backdropFilter: "blur(14px)", boxShadow: "0 6px 20px rgba(0,0,0,0.05)",
+                }}
+              >
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)", fontFamily: "var(--font-ui)" }}>
+                  community board
+                </p>
+                <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--slate)", fontFamily: "var(--font-ui)", fontWeight: 300 }}>
+                  Read or share anonymous thoughts →
+                </p>
+              </button>
 
               {/* Blocked users panel */}
               {blockedUsers.length > 0 && (
@@ -723,7 +776,7 @@ function LobbyContent() {
                 Waiting for someone to join
               </p>
               <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--slate)", fontFamily: "var(--font-ui)" }}>
-                Most connections happen sooner than 5 minutes.
+                Most connections happen within the first few minutes.
               </p>
             </div>
             <button onClick={() => router.push(`/waiting?request_id=${encodeURIComponent(pendingRequestId!)}`)} className="btn btn-sm btn-ghost">

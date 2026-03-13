@@ -17,15 +17,18 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, field_validator
 from passlib.context import CryptContext
+from sqlalchemy import select, update
 
 from config import get_settings
 from services.otp import get_email_hash
 from services.email import send_verification_email
 from services.session_token import create_session_token
-from services.username_gen import generate_unique_username, reserve_username
-from services.session import save_profile, get_profile, set_email_verified
+from services.username_gen import generate_unique_username
+from services.session import save_profile, get_profile, set_email_verified, get_blocked_set
 from middleware.jwt_auth import require_auth
 from db.redis_client import get_redis
+from db.postgres_client import get_session_factory
+from db.models import User, Profile
 
 logger = logging.getLogger(__name__)
 
@@ -82,13 +85,14 @@ def _calculate_age(dob: date) -> int:
     return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
 
 
-async def _delete_registration_state(redis, email_hash: str, session_id: str) -> None:
-    await redis.delete(
-        f"email_account:{email_hash}",
-        f"pwd:{session_id}",
-        f"acct_email:{session_id}",
-        f"session_ehash:{session_id}",
-    )
+async def _delete_user(session_id: str) -> None:
+    """Delete a user and cascade to profile. Used on registration rollback."""
+    factory = get_session_factory()
+    async with factory() as db:
+        user = await db.get(User, session_id)
+        if user:
+            await db.delete(user)
+            await db.commit()
 
 
 async def _send_verify_link(email: str, session_id: str, redis) -> None:
@@ -111,31 +115,36 @@ async def _send_verify_link(email: str, session_id: str, redis) -> None:
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(body: RegisterRequest):
     """Create a new account. JWT is issued immediately; email_verified starts False."""
-    redis = await get_redis()
     email = body.email.lower().strip()
     email_hash = get_email_hash(email)
 
-    if await redis.exists(f"email_account:{email_hash}"):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="An account with this email already exists. Please sign in.",
-        )
+    factory = get_session_factory()
+    async with factory() as db:
+        existing = await db.execute(select(User).where(User.email_hash == email_hash))
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An account with this email already exists. Please sign in.",
+            )
 
     token, session_id = create_session_token(email_hash)
     pwd_hash = _pwd_ctx.hash(body.password)
 
-    pipe = redis.pipeline(transaction=False)
-    pipe.set(f"email_account:{email_hash}", session_id)
-    pipe.set(f"pwd:{session_id}", pwd_hash)
-    pipe.set(f"acct_email:{session_id}", email)          # for resending verification
-    pipe.set(f"session_ehash:{session_id}", email_hash)  # for issuing JWT after verify
-    await pipe.execute()
+    async with factory() as db:
+        db.add(User(
+            session_id=session_id,
+            email_hash=email_hash,
+            email=email,
+            password_hash=pwd_hash,
+        ))
+        await db.commit()
 
     auto_verified = email in _AUTO_VERIFIED_EMAILS
     if auto_verified:
         await set_email_verified(session_id)
     else:
         try:
+            redis = await get_redis()
             await _send_verify_link(email, session_id, redis)
         except Exception:
             logger.warning("Failed to send verification email to %s", email)
@@ -151,24 +160,27 @@ async def register(body: RegisterRequest):
 @router.post("/login")
 async def login(body: LoginRequest):
     """Sign in with email + password. Returns JWT."""
-    redis = await get_redis()
     email = body.email.lower().strip()
     email_hash = get_email_hash(email)
 
-    session_id = await redis.get(f"email_account:{email_hash}")
-    if not session_id:
+    factory = get_session_factory()
+    async with factory() as db:
+        result = await db.execute(select(User).where(User.email_hash == email_hash))
+        user = result.scalar_one_or_none()
+
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="No account found with this email",
         )
 
-    pwd_hash = await redis.get(f"pwd:{session_id}")
-    if not pwd_hash or not _pwd_ctx.verify(body.password, pwd_hash):
+    if not _pwd_ctx.verify(body.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect password",
         )
 
+    session_id = user.session_id
     profile = await get_profile(session_id)
     has_profile = bool(profile and profile.get("username"))
     email_verified = bool(profile and profile.get("email_verified") == "1")
@@ -200,12 +212,14 @@ async def send_verification(payload: dict = Depends(require_auth)):
         )
     await redis.setex(throttle_key, 60, "1")
 
-    email = await redis.get(f"acct_email:{session_id}")
-    if not email:
+    factory = get_session_factory()
+    async with factory() as db:
+        user = await db.get(User, session_id)
+    if not user:
         raise HTTPException(status_code=400, detail="Account email not found")
 
     try:
-        await _send_verify_link(email, session_id, redis)
+        await _send_verify_link(user.email, session_id, redis)
     except Exception as exc:
         logger.error(f"Failed to send verification email: {exc}")
         raise HTTPException(
@@ -233,7 +247,10 @@ async def verify_email_route(token: str):
     profile = await get_profile(session_id)
     has_profile = bool(profile and profile.get("username"))
 
-    email_hash = await redis.get(f"session_ehash:{session_id}") or ""
+    factory = get_session_factory()
+    async with factory() as db:
+        user = await db.get(User, session_id)
+    email_hash = user.email_hash if user else ""
     fresh_token, _ = create_session_token(email_hash, session_id)
 
     return {
@@ -260,7 +277,6 @@ async def set_profile(
 
     redis = await get_redis()
     username = await generate_unique_username(redis)
-    await reserve_username(redis, username, session_id)
 
     await save_profile(
         session_id=session_id,
@@ -282,23 +298,29 @@ async def update_profile(
 ):
     """Re-roll username and/or change avatar."""
     session_id = payload["sub"]
-    redis = await get_redis()
     profile = await get_profile(session_id)
     if not profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
 
+    factory = get_session_factory()
+    updates = {}
+
     if body.reroll_username:
-        old = profile.get("username", "")
-        if old:
-            await redis.delete(f"username:{old}")
+        redis = await get_redis()
         new_username = await generate_unique_username(redis)
-        await reserve_username(redis, new_username, session_id)
-        await redis.hset(f"profile:{session_id}", "username", new_username)
+        updates["username"] = new_username
         profile["username"] = new_username
 
     if body.avatar_id is not None:
-        await redis.hset(f"profile:{session_id}", "avatar_id", str(body.avatar_id))
+        updates["avatar_id"] = body.avatar_id
         profile["avatar_id"] = str(body.avatar_id)
+
+    if updates:
+        async with factory() as db:
+            await db.execute(
+                update(Profile).where(Profile.session_id == session_id).values(**updates)
+            )
+            await db.commit()
 
     return {
         "username": profile.get("username"),
@@ -312,8 +334,10 @@ async def get_me(payload: dict = Depends(require_auth)):
     profile = await get_profile(session_id)
     if not profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
-    redis = await get_redis()
-    email = await redis.get(f"acct_email:{session_id}")
+    factory = get_session_factory()
+    async with factory() as db:
+        user = await db.get(User, session_id)
+    email = user.email if user else ""
     return {
         "username": profile.get("username", ""),
         "avatar_id": int(profile.get("avatar_id", 0)),
@@ -329,32 +353,28 @@ async def get_me(payload: dict = Depends(require_auth)):
 async def get_user_profile(username: str, payload: dict = Depends(require_auth)):
     """Public stats for a user. Returns 404 if the requester has been blocked by the profile owner."""
     requester_session_id = payload["sub"]
-    redis = await get_redis()
-    session_id = await redis.get(f"username:{username}")
-    if not session_id:
-        profile_keys = await redis.keys("profile:*")
-        for profile_key in profile_keys:
-            profile_session_id = profile_key.split(":", 1)[1]
-            profile = await get_profile(profile_session_id)
-            if profile and profile.get("username") == username:
-                session_id = profile_session_id
-                await reserve_username(redis, username, profile_session_id)
-                break
-    if not session_id:
+
+    factory = get_session_factory()
+    async with factory() as db:
+        result = await db.execute(select(Profile).where(Profile.username == username))
+        profile_row = result.scalar_one_or_none()
+
+    if not profile_row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    session_id = profile_row.session_id
+
     # If the profile owner has blocked the requester, hide the profile entirely
-    is_blocked = await redis.sismember(f"blocked:{session_id}", requester_session_id)
-    if is_blocked:
+    blocked = await get_blocked_set(session_id)
+    if requester_session_id in blocked:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    profile = await get_profile(session_id)
-    if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
     return {
-        "username": profile.get("username", username),
-        "avatar_id": int(profile.get("avatar_id", 0)),
-        "speak_count": int(profile.get("speak_count", 0)),
-        "listen_count": int(profile.get("listen_count", 0)),
-        "member_since": profile.get("created_at", ""),
+        "username": profile_row.username,
+        "avatar_id": profile_row.avatar_id,
+        "speak_count": profile_row.speak_count,
+        "listen_count": profile_row.listen_count,
+        "member_since": str(profile_row.created_at),
     }
 
 
@@ -383,10 +403,15 @@ async def forgot_password(body: ForgotPasswordRequest):
     email = body.email.lower().strip()
     email_hash = get_email_hash(email)
 
-    session_id = await redis.get(f"email_account:{email_hash}")
-    if not session_id:
-        # Don't reveal whether the email exists
+    factory = get_session_factory()
+    async with factory() as db:
+        result = await db.execute(select(User).where(User.email_hash == email_hash))
+        user = result.scalar_one_or_none()
+
+    if not user:
         return {"message": "If an account exists, a reset link has been sent."}
+
+    session_id = user.session_id
 
     # Rate limit: 1 reset email per 2 minutes
     throttle_key = f"pwd_reset_throttle:{session_id}"
@@ -422,6 +447,12 @@ async def reset_password(body: ResetPasswordRequest):
 
     await redis.delete(f"pwd_reset_token:{body.token}")
     pwd_hash = _pwd_ctx.hash(body.new_password)
-    await redis.set(f"pwd:{session_id}", pwd_hash)
+
+    factory = get_session_factory()
+    async with factory() as db:
+        await db.execute(
+            update(User).where(User.session_id == session_id).values(password_hash=pwd_hash)
+        )
+        await db.commit()
 
     return {"message": "Password has been reset. You can now sign in."}
