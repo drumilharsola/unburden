@@ -152,7 +152,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
             const SizedBox(height: 10),
             _rule(Icons.block, 'No hate speech or harassment.'),
             const SizedBox(height: 10),
-            _rule(Icons.favorite_border, 'Be kind — the other person is human too.'),
+            _rule(Icons.favorite_border, 'Be kind - the other person is human too.'),
           ],
         ),
         actions: [
@@ -235,7 +235,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                         const SizedBox(height: 16),
                         Text('All quiet right now.', style: AppTypography.title(fontSize: 20, color: AppColors.charcoal)),
                         const SizedBox(height: 8),
-                        Text('Stay here — new requests will appear automatically.', style: AppTypography.body(fontSize: 14, color: AppColors.slate), textAlign: TextAlign.center),
+                        Text('Stay here - new requests will appear automatically.', style: AppTypography.body(fontSize: 14, color: AppColors.slate), textAlign: TextAlign.center),
                       ]),
                     ),
                   )

@@ -261,7 +261,7 @@ function ChatContent() {
 
       switch (data.type) {
         case "history":
-          // Always merge — never overwrite. Prevents stale-closure race where
+          // Always merge - never overwrite. Prevents stale-closure race where
           // a replace wipes optimistic messages or hides peer messages already
           // added by the polling sync.
           setMessages((prev) => mergeTranscriptItems(prev, data.messages));
@@ -346,7 +346,7 @@ function ChatContent() {
     };
 
     return () => { ws.close(); };
-  // appendSessionMarker intentionally excluded — use appendSessionMarkerRef.current instead
+  // appendSessionMarker intentionally excluded - use appendSessionMarkerRef.current instead
   // to prevent reconnect whenever roomStartedMarkerTs changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, roomId, username, mode]);
@@ -656,7 +656,7 @@ function ChatContent() {
             );
           }
 
-          // If we know the peer, use peer-exclusion — more reliable than comparing
+          // If we know the peer, use peer-exclusion - more reliable than comparing
           // against the Zustand username which can be stale after a re-roll.
           const isMe = peerUsername
             ? msg.from !== peerUsername

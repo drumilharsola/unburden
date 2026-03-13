@@ -115,7 +115,7 @@ class HomeScreen extends ConsumerWidget {
                         const SizedBox(height: 14),
                         Text(
                           'Unburden is a safe, anonymous space where you can speak freely '
-                          'and be heard — no judgement, no identity, just honest human connection.',
+                          'and be heard - no judgement, no identity, just honest human connection.',
                           style: AppTypography.body(
                             fontSize: 14,
                             color: AppColors.graphite,

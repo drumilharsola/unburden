@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+import '../config/routes.dart';
 import '../config/theme.dart';
 import '../state/pending_wait_provider.dart';
 import '../widgets/timer_widget.dart';
@@ -27,7 +27,7 @@ class _WaitingOverlayState extends ConsumerState<WaitingOverlay> {
         final roomId = ref.read(pendingWaitProvider).matchedRoomId;
         if (roomId != null) {
           ref.read(pendingWaitProvider.notifier).clearMatch();
-          context.go('/chat?room_id=${Uri.encodeComponent(roomId)}');
+          ref.read(routerProvider).go('/chat?room_id=${Uri.encodeComponent(roomId)}');
         }
       });
     }
@@ -35,7 +35,7 @@ class _WaitingOverlayState extends ConsumerState<WaitingOverlay> {
     if (!wait.isWaiting) return const SizedBox.shrink();
 
     // Hide overlay when on the chats tab (bottom sheet handles waiting there)
-    final location = GoRouterState.of(context).uri.path;
+    final location = ref.read(routerProvider).routerDelegate.currentConfiguration.uri.path;
     if (location == '/chats' || location == '/waiting') {
       return const SizedBox.shrink();
     }
@@ -89,7 +89,7 @@ class _WaitingOverlayState extends ConsumerState<WaitingOverlay> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           GestureDetector(
-                            onTap: () => context.go('/chats'),
+                            onTap: () => ref.read(routerProvider).go('/chats'),
                             child: Icon(Icons.open_in_full_rounded, size: 16, color: Colors.white54),
                           ),
                           const SizedBox(width: 10),

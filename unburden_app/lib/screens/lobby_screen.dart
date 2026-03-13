@@ -202,7 +202,7 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
             const SizedBox(height: 10),
             _safetyRule(Icons.block, 'No hate speech, harassment, or abusive language.'),
             const SizedBox(height: 10),
-            _safetyRule(Icons.favorite_border, 'Be kind and respectful — the other person is human too.'),
+            _safetyRule(Icons.favorite_border, 'Be kind and respectful - the other person is human too.'),
           ],
         ),
         actions: [

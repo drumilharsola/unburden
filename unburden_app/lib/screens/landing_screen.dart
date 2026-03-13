@@ -7,19 +7,11 @@ import '../widgets/flow_logo.dart';
 import '../widgets/orb_background.dart';
 import '../widgets/pill.dart';
 import '../widgets/flow_button.dart';
-import '../widgets/warm_card.dart';
 import '../widgets/wellbeing_poster.dart';
 import '../config/brand.dart';
 
 class LandingScreen extends ConsumerWidget {
   const LandingScreen({super.key});
-
-  static const _manifesto = [
-    ('Say it messy', 'A protected place to unload the weight.'),
-    ('Meet a real human', 'One steady exchange of words that does not become a loop.'),
-    ('Leave lighter', 'Built for emotional decompression, not for oversharing.'),
-    ('Stay unseen', 'Your identity stays yours throughout.'),
-  ];
 
   static const _signals = [
     ('01', '15-minute sessions'),
@@ -127,92 +119,7 @@ class LandingScreen extends ConsumerWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 28),
-                      _flexSection(
-                        narrow: narrow,
-                        children: [
-                          Expanded(
-                            flex: 7,
-                            child: Wrap(
-                              spacing: 18,
-                              runSpacing: 18,
-                              children: _manifesto
-                                  .map(
-                                    (item) => SizedBox(
-                                      width: narrow ? double.infinity : 300,
-                                      child: _ManifestoCard(title: item.$1, body: item.$2),
-                                    ),
-                                  )
-                                  .toList(),
-                            ),
-                          ),
-                          SizedBox(width: narrow ? 0 : 18, height: narrow ? 18 : 0),
-                          Expanded(
-                            flex: 4,
-                            child: WarmCard(
-                              padding: const EdgeInsets.all(24),
-                              color: AppColors.paper,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('You deserve a space that actually feels safe.', style: AppTypography.title(fontSize: 24)),
-                                  const SizedBox(height: 10),
-                                  Text(
-                                    'Every detail here is shaped around your comfort - from the gentle visuals to the quiet flow of each session. This is not another app that treats your feelings like a to-do list.',
-                                    style: AppTypography.body(fontSize: 15, color: AppColors.graphite),
-                                  ),
-                                  const SizedBox(height: 18),
-                                  const WellbeingPoster(
-                                    title: 'Someone is here when you need it.',
-                                    subtitle: 'The space around you shifts gently to match your mood and your moment.',
-                                    mood: PosterMood.balance,
-                                    compact: true,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 28),
-                      WarmCard(
-                        padding: const EdgeInsets.all(28),
-                        color: AppColors.ink,
-                        child: narrow
-                            ? Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '"Sometimes a stranger gives you enough quiet to hear yourself again."',
-                                    style: AppTypography.display(fontSize: 26, color: AppColors.white),
-                                  ),
-                                  const SizedBox(height: 20),
-                                  Text(
-                                    'Every screen, every word, every pause is here because it helps you land softer.',
-                                    style: AppTypography.body(fontSize: 15, color: AppColors.white.withValues(alpha: 0.78)),
-                                  ),
-                                ],
-                              )
-                            : Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      '"Sometimes a stranger gives you enough quiet to hear yourself again."',
-                                      style: AppTypography.display(fontSize: 34, color: AppColors.white),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 20),
-                                  SizedBox(
-                                    width: 240,
-                                    child: Text(
-                                      'Every screen, every word, every pause is here because it helps you land softer.',
-                                      style: AppTypography.body(fontSize: 15, color: AppColors.white.withValues(alpha: 0.78)),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                      ),
+                      const SizedBox(height: 40),
                     ],
                   ),
                 ),
@@ -262,28 +169,6 @@ class _SignalChip extends StatelessWidget {
           Text(number, style: AppTypography.label(color: AppColors.accent)),
           const SizedBox(width: 10),
           Text(label, style: AppTypography.ui(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink)),
-        ],
-      ),
-    );
-  }
-}
-
-class _ManifestoCard extends StatelessWidget {
-  const _ManifestoCard({required this.title, required this.body});
-
-  final String title;
-  final String body;
-
-  @override
-  Widget build(BuildContext context) {
-    return WarmCard(
-      padding: const EdgeInsets.all(22),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: AppTypography.title(fontSize: 24)),
-          const SizedBox(height: 8),
-          Text(body, style: AppTypography.body(fontSize: 14, color: AppColors.graphite)),
         ],
       ),
     );

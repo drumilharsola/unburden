@@ -50,6 +50,14 @@ class _UnifiedChatScreenState extends ConsumerState<UnifiedChatScreen> {
   bool _blocked = false;
   TranscriptMessage? _replyTo;
 
+  void _goBack() {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      context.go('/home');
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -210,7 +218,7 @@ class _UnifiedChatScreenState extends ConsumerState<UnifiedChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('User blocked')),
         );
-        context.go('/chats');
+        _goBack();
       }
     } catch (e) {
       if (mounted) {
@@ -257,7 +265,12 @@ class _UnifiedChatScreenState extends ConsumerState<UnifiedChatScreen> {
       displayTranscript.sort((a, b) => a.ts.compareTo(b.ts));
     }
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _goBack();
+      },
+      child: Scaffold(
       backgroundColor: AppColors.snow,
       body: Stack(
         children: [
@@ -310,10 +323,11 @@ class _UnifiedChatScreenState extends ConsumerState<UnifiedChatScreen> {
               onClose: () => setState(() => _showPeerProfile = false),
               onBlocked: () {
                 setState(() => _showPeerProfile = false);
-                context.go('/chats');
+                _goBack();
               },
             ),
         ],
+      ),
       ),
     );
   }
@@ -335,7 +349,7 @@ class _UnifiedChatScreenState extends ConsumerState<UnifiedChatScreen> {
           children: [
             IconButton(
               icon: Icon(Icons.arrow_back_rounded, size: 20, color: AppColors.ink),
-              onPressed: () => context.go('/chats'),
+              onPressed: () => _goBack(),
             ),
             GestureDetector(
               onTap: () => setState(() => _showPeerProfile = true),
@@ -411,7 +425,7 @@ class _UnifiedChatScreenState extends ConsumerState<UnifiedChatScreen> {
                 size: FlowButtonSize.sm,
                 onPressed: () {
                   liveNotifier!.leave();
-                  context.go('/chats');
+                  _goBack();
                 },
               ),
             ] else ...[
@@ -722,7 +736,7 @@ class _UnifiedChatScreenState extends ConsumerState<UnifiedChatScreen> {
                 label: '← Back',
                 variant: FlowButtonVariant.ghost,
                 size: FlowButtonSize.sm,
-                onPressed: () => context.go('/chats'),
+                onPressed: () => _goBack(),
               ),
               const SizedBox(width: 8),
               FlowButton(

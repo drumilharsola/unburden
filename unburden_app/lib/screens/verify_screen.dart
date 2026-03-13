@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,7 +10,6 @@ import '../widgets/flow_input.dart';
 import '../widgets/warm_card.dart';
 import '../widgets/orb_background.dart';
 import '../widgets/pill.dart';
-import '../widgets/wellbeing_poster.dart';
 
 enum _Mode { login, register, checkEmail, forgotPassword, resetPassword }
 
@@ -33,7 +31,6 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
   bool _resendLoading = false;
   bool _resendDone = false;
   String? _pendingToken;
-  late int _quoteIndex;
   // Forgot password
   bool _forgotSent = false;
   // Reset password
@@ -41,19 +38,6 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
   final _newPassCtrl = TextEditingController();
   final _newConfirmCtrl = TextEditingController();
   bool _resetSuccess = false;
-
-  static const _quotes = [
-    ('"Give sorrow words; the grief that does not speak whispers the o\'er-fraught heart, and bids it break."', 'William Shakespeare · Macbeth'),
-    ('"To weep is to make less the depth of grief."', 'William Shakespeare · Henry VI'),
-    ('"The best way out is always through."', 'Robert Frost · A Servant to Servants'),
-    ('"Although the world is full of suffering, it is also full of the overcoming of it."', 'Helen Keller · Optimism'),
-    ('"I am not afraid of storms, for I am learning how to sail my ship."', 'Louisa May Alcott · Little Women'),
-    ('"Nothing can bring you peace but yourself."', 'Ralph Waldo Emerson · Self-Reliance'),
-    ('"Be not afraid of life. Believe that life is worth living, and your belief will help create the fact."', 'William James · The Will to Believe'),
-    ('"The soul would have no rainbow had the eyes no tears."', 'John Vance Cheney · Tears'),
-    ('"A loving heart is the truest wisdom."', 'Charles Dickens · David Copperfield'),
-    ('"What do we live for, if it is not to make life less difficult for each other?"', 'George Eliot · Middlemarch'),
-  ];
 
   static const _offerItems = [
     ('Anonymous', 'Come in without your real name. Just be yourself here.'),
@@ -64,7 +48,6 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
   @override
   void initState() {
     super.initState();
-    _quoteIndex = Random().nextInt(_quotes.length);
     _emailCtrl.addListener(_handleFieldUpdate);
     _passCtrl.addListener(_handleFieldUpdate);
     _confirmCtrl.addListener(_handleFieldUpdate);
@@ -269,15 +252,6 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
   }
 
   Widget _posterPanel({bool compact = false}) {
-    final quote = _quotes[_quoteIndex];
-    final mood = switch (_mode) {
-      _Mode.login => PosterMood.balance,
-      _Mode.register => PosterMood.listening,
-      _Mode.checkEmail => PosterMood.grounding,
-      _Mode.forgotPassword => PosterMood.balance,
-      _Mode.resetPassword => PosterMood.balance,
-    };
-
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: compact ? 0 : 48, vertical: compact ? 0 : 42),
       child: Column(
@@ -285,26 +259,6 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
         children: [
           FlowLogo(dark: true, onTap: () => context.go('/')),
           SizedBox(height: compact ? 20 : 28),
-          WellbeingPoster(
-            eyebrow: _mode == _Mode.login ? 'WELCOME BACK' : _mode == _Mode.register ? 'NEW ROOM' : _mode == _Mode.forgotPassword || _mode == _Mode.resetPassword ? 'RESET PASSWORD' : 'CHECK EMAIL',
-            title: _mode == _Mode.login
-                ? 'Return to a quieter corner of the internet.'
-                : _mode == _Mode.register
-                    ? 'Build a care account that feels human from the first tap.'
-                    : _mode == _Mode.forgotPassword || _mode == _Mode.resetPassword
-                        ? 'Let\u2019s get you back in.'
-                        : 'Open the link, then step back in when you are ready.',
-            subtitle: _mode == _Mode.login
-                ? 'The redesign uses custom poster scenes to reduce the coldness of account screens.'
-                : _mode == _Mode.register
-                    ? 'A more expressive sign-up flow makes emotional safety visible instead of implied.'
-                    : _mode == _Mode.forgotPassword || _mode == _Mode.resetPassword
-                        ? 'A gentle path back to your quiet corner.'
-                        : 'Verification now lives inside the same visual system instead of a generic utility screen.',
-            mood: mood,
-            compact: compact,
-          ),
-          SizedBox(height: compact ? 16 : 20),
           WarmCard(
             padding: const EdgeInsets.all(18),
             color: AppColors.paper,
@@ -326,10 +280,6 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(quote.$1, style: AppTypography.body(fontSize: 13, color: AppColors.ink80)),
-                const SizedBox(height: 6),
-                Text(quote.$2, style: AppTypography.label(color: AppColors.slate)),
               ],
             ),
           ),

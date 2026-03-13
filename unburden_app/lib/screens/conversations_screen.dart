@@ -203,7 +203,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
         }
         if (event == 'matched') {
           _ws?.sink.close();
-          if (mounted) context.go('/chat?room_id=${Uri.encodeComponent(msg['room_id'] as String)}');
+          if (mounted) context.push('/chat?room_id=${Uri.encodeComponent(msg['room_id'] as String)}');
         }
       },
       onDone: () {
@@ -221,7 +221,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
 
   Future<void> _handleVent() async {
     final wait = ref.read(pendingWaitProvider);
-    // Already waiting — just expand the sheet
+    // Already waiting - just expand the sheet
     if (wait.isWaiting) {
       _venterSheetCtrl.animateTo(0.5,
           duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
@@ -257,7 +257,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
     setState(() => _error = '');
     try {
       final res = await ref.read(apiClientProvider).acceptSpeaker(token, requestId);
-      if (mounted) context.go('/chat?room_id=${Uri.encodeComponent(res.roomId)}');
+      if (mounted) context.push('/chat?room_id=${Uri.encodeComponent(res.roomId)}');
     } on AuthException {
       ref.read(authProvider.notifier).clear();
       if (mounted) context.go('/verify');
@@ -358,6 +358,17 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
     final groups = _groupByPeer(rooms);
     final wait = ref.watch(pendingWaitProvider);
 
+    // Handle match from pending wait provider
+    if (wait.matchedRoomId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final roomId = ref.read(pendingWaitProvider).matchedRoomId;
+        if (roomId != null && mounted) {
+          ref.read(pendingWaitProvider.notifier).clearMatch();
+          context.push('/chat?room_id=${Uri.encodeComponent(roomId)}');
+        }
+      });
+    }
+
     return Stack(
       children: [
         // Conversation list
@@ -366,8 +377,6 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 140),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Text('🎤', style: TextStyle(fontSize: 48)),
-                    const SizedBox(height: 16),
                     Text('No conversations yet', style: AppTypography.title(fontSize: 20, color: AppColors.charcoal)),
                     const SizedBox(height: 8),
                     Text('Your vent sessions will appear here.',
@@ -381,7 +390,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
                 itemBuilder: (_, i) => _PeerTile(
                   group: groups[i],
                   roleBadge: '🎤',
-                  onTap: () => context.go(
+                  onTap: () => context.push(
                     '/unified-chat?peer_session_id=${Uri.encodeComponent(groups[i].peerSessionId)}&peer_username=${Uri.encodeComponent(groups[i].peerUsername)}',
                   ),
                 ),
@@ -395,19 +404,19 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
           maxChildSize: 0.55,
           snap: true,
           snapSizes: const [0.12, 0.55],
-          builder: (context, scrollCtrl) {
+          builder: (sheetCtx, scrollCtrl) {
             return Container(
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                 boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 20, offset: const Offset(0, -4))],
               ),
-              child: SingleChildScrollView(
+              child: CustomScrollView(
                 controller: scrollCtrl,
-                child: Column(
-                  children: [
-                    // Grab handle
-                    Center(
+                slivers: [
+                  // Grab handle
+                  SliverToBoxAdapter(
+                    child: Center(
                       child: Container(
                         width: 36,
                         height: 4,
@@ -418,110 +427,118 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
                         ),
                       ),
                     ),
-
-                    if (!wait.isWaiting) ...[
-                      // Vent button
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: GestureDetector(
-                          onTap: _ventLoading ? null : _handleVent,
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [AppColors.venterPrimary, AppColors.accentHover],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: AppRadii.lgAll,
-                            ),
-                            child: Row(
-                              children: [
-                                const Text('🎤', style: TextStyle(fontSize: 22)),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        _ventLoading ? 'Finding your space…' : 'I need to vent',
-                                        style: AppTypography.title(fontSize: 17, color: Colors.white),
+                  ),
+                  // Centered content
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (!wait.isWaiting) ...[
+                          // Vent button
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: GestureDetector(
+                              onTap: _ventLoading ? null : _handleVent,
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [AppColors.venterPrimary, AppColors.accentHover],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: AppRadii.lgAll,
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Text('🎤', style: TextStyle(fontSize: 22)),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            _ventLoading ? 'Finding your space…' : 'I need to vent',
+                                            style: AppTypography.title(fontSize: 17, color: Colors.white),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text('Start an anonymous conversation',
+                                              style: AppTypography.body(fontSize: 12, color: Colors.white70)),
+                                        ],
                                       ),
-                                      const SizedBox(height: 2),
-                                      Text('Start an anonymous conversation',
-                                          style: AppTypography.body(fontSize: 12, color: Colors.white70)),
+                                    ),
+                                    if (_ventLoading)
+                                      const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
+                                      )
+                                    else
+                                      Icon(Icons.arrow_forward_rounded, color: Colors.white70),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ] else ...[
+                          // Waiting state
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                              decoration: BoxDecoration(
+                                color: AppColors.ink,
+                                borderRadius: AppRadii.lgAll,
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Row(
+                                    children: [
+                                      SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text('Finding someone to listen…',
+                                            style: AppTypography.ui(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+                                      ),
+                                      TimerWidget(
+                                        remainingSeconds: wait.remaining,
+                                        onEnd: () => ref.read(pendingWaitProvider.notifier).cancel(),
+                                      ),
                                     ],
                                   ),
-                                ),
-                                if (_ventLoading)
+                                  const SizedBox(height: 14),
                                   const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
-                                  )
-                                else
-                                  Icon(Icons.arrow_forward_rounded, color: Colors.white70),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ] else ...[
-                      // Waiting state
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: AppColors.ink,
-                            borderRadius: AppRadii.lgAll,
-                          ),
-                          child: Column(
-                            children: [
-                              Row(
-                                children: [
-                                  SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
+                                    width: 56,
+                                    height: 56,
+                                    child: BreathingCircle(),
                                   ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text('Finding someone to listen…',
-                                        style: AppTypography.ui(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
-                                  ),
-                                  TimerWidget(
-                                    remainingSeconds: wait.remaining,
-                                    onEnd: () => ref.read(pendingWaitProvider.notifier).cancel(),
+                                  const SizedBox(height: 10),
+                                  Text('Breathe. Someone will show up.',
+                                      style: AppTypography.body(fontSize: 13, color: Colors.white54)),
+                                  const SizedBox(height: 10),
+                                  FlowButton(
+                                    label: 'Cancel',
+                                    variant: FlowButtonVariant.ghost,
+                                    size: FlowButtonSize.sm,
+                                    onPressed: () => ref.read(pendingWaitProvider.notifier).cancel(),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 20),
-                              const SizedBox(
-                                width: 80,
-                                height: 80,
-                                child: BreathingCircle(),
-                              ),
-                              const SizedBox(height: 16),
-                              Text('Breathe. Someone will show up.',
-                                  style: AppTypography.body(fontSize: 13, color: Colors.white54)),
-                              const SizedBox(height: 16),
-                              FlowButton(
-                                label: 'Cancel',
-                                variant: FlowButtonVariant.ghost,
-                                size: FlowButtonSize.sm,
-                                onPressed: () => ref.read(pendingWaitProvider.notifier).cancel(),
-                              ),
-                            ],
+                            ),
                           ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 20),
-                  ],
-                ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
               ),
             );
           },
@@ -545,8 +562,6 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 140),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Text('👂', style: TextStyle(fontSize: 48)),
-                    const SizedBox(height: 16),
                     Text('No conversations yet', style: AppTypography.title(fontSize: 20, color: AppColors.charcoal)),
                     const SizedBox(height: 8),
                     Text('Listen sessions will appear here.',
@@ -560,13 +575,13 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
                 itemBuilder: (_, i) => _PeerTile(
                   group: groups[i],
                   roleBadge: '👂',
-                  onTap: () => context.go(
+                  onTap: () => context.push(
                     '/unified-chat?peer_session_id=${Uri.encodeComponent(groups[i].peerSessionId)}&peer_username=${Uri.encodeComponent(groups[i].peerUsername)}',
                   ),
                 ),
               ),
 
-        // Draggable bottom sheet — listener requests board
+        // Draggable bottom sheet - listener requests board
         DraggableScrollableSheet(
           controller: _listenerSheetCtrl,
           initialChildSize: 0.12,
@@ -574,7 +589,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
           maxChildSize: 0.6,
           snap: true,
           snapSizes: const [0.12, 0.6],
-          builder: (context, scrollCtrl) {
+          builder: (sheetCtx, scrollCtrl) {
             return Container(
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -640,7 +655,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
                     if (_board.isEmpty)
                       Padding(
                         padding: const EdgeInsets.all(20),
-                        child: Text('Stay here — new requests appear automatically.',
+                        child: Text('Stay here - new requests appear automatically.',
                             style: AppTypography.body(fontSize: 13, color: AppColors.slate)),
                       )
                     else

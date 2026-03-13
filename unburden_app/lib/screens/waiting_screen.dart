@@ -7,12 +7,11 @@ import 'package:go_router/go_router.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../config/env.dart';
 import '../config/theme.dart';
+import '../data/fun_facts.dart';
 import '../services/api_client.dart';
 import '../state/auth_provider.dart';
-import '../widgets/flow_logo.dart';
 import '../widgets/flow_button.dart';
 import '../widgets/orb_background.dart';
-import '../widgets/pill.dart';
 import '../widgets/timer_widget.dart';
 import '../widgets/breathing_circle.dart';
 
@@ -26,12 +25,19 @@ class WaitingScreen extends ConsumerStatefulWidget {
   ConsumerState<WaitingScreen> createState() => _WaitingScreenState();
 }
 
-class _WaitingScreenState extends ConsumerState<WaitingScreen> {
+class _WaitingScreenState extends ConsumerState<WaitingScreen>
+    with SingleTickerProviderStateMixin {
   int _remaining = _waitWindowSeconds;
   bool _timedOut = false;
   bool _loading = true;
   bool _retrying = false;
   late String _requestId;
+  late String _funFact;
+  Timer? _factTimer;
+
+  // Breathe animation
+  late final AnimationController _breatheCtrl;
+  bool _breatheIn = true;
 
   WebSocketChannel? _ws;
   StreamSubscription? _wsSub;
@@ -42,11 +48,35 @@ class _WaitingScreenState extends ConsumerState<WaitingScreen> {
   void initState() {
     super.initState();
     _requestId = widget.requestId;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _init());
+    _funFact = kFunFacts[Random().nextInt(kFunFacts.length)];
+    _breatheCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          setState(() => _breatheIn = false);
+          _breatheCtrl.reverse();
+        } else if (status == AnimationStatus.dismissed) {
+          setState(() => _breatheIn = true);
+          _breatheCtrl.forward();
+        }
+      });
+    _breatheCtrl.forward();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _init();
+      // Rotate fun fact every 10 seconds
+      _factTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+        if (mounted) {
+          setState(() => _funFact = kFunFacts[Random().nextInt(kFunFacts.length)]);
+        }
+      });
+    });
   }
 
   @override
   void dispose() {
+    _breatheCtrl.dispose();
+    _factTimer?.cancel();
     _reconnectTimer?.cancel();
     _pollTimer?.cancel();
     _wsSub?.cancel();
@@ -191,107 +221,167 @@ class _WaitingScreenState extends ConsumerState<WaitingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.snow,
-      body: Stack(
-        children: [
-          const OrbBackground(),
-          SafeArea(
-            child: Column(
-              children: [
-                // Nav
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const FlowLogo(dark: true),
-                      if (!_timedOut && !_loading)
-                        FlowButton(label: '← Back', variant: FlowButtonVariant.ghost, size: FlowButtonSize.sm, onPressed: () {
-                          context.go('/home');
-                        }),
-                    ],
-                  ),
-                ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleCancel();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.snow,
+        body: Stack(
+          children: [
+            const OrbBackground(),
+            SafeArea(
+              child: _timedOut ? _timedOutView() : _loading ? _loadingView() : _waitingView(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-                // Center content
-                Expanded(
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 32),
-                      child: _timedOut ? _timedOutView() : _waitingView(),
+  Widget _loadingView() {
+    return Center(child: CircularProgressIndicator(color: AppColors.accent));
+  }
+
+  Widget _waitingView() {
+    return Column(
+      children: [
+        // Top bar with cancel
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              FlowButton(
+                label: '← Back',
+                variant: FlowButtonVariant.ghost,
+                size: FlowButtonSize.sm,
+                onPressed: _handleCancel,
+              ),
+              TimerWidget(remainingSeconds: _remaining, onEnd: _handleTimeout),
+            ],
+          ),
+        ),
+
+        // Center breathing section
+        Expanded(
+          child: Center(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Breathing circle with text
+                    SizedBox(
+                      width: 180,
+                      height: 180,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          const BreathingCircle(size: 140),
+                          AnimatedOpacity(
+                            opacity: 1.0,
+                            duration: const Duration(milliseconds: 500),
+                            child: Text(
+                              _breatheIn ? 'Breathe in' : 'Breathe out',
+                              style: AppTypography.ui(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.accent,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ),
+                    const SizedBox(height: 24),
 
-                // Bottom actions
-                if (!_timedOut && !_loading)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 40),
-                    child: FlowButton(
+                    Text(
+                      'Your space is ready.',
+                      style: AppTypography.title(fontSize: 22, color: AppColors.ink),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Someone will be here soon.',
+                      style: AppTypography.body(fontSize: 14, color: AppColors.slate),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 28),
+
+                    // Fun fact card
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 500),
+                      child: Container(
+                        key: ValueKey(_funFact),
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.lavender.withValues(alpha: 0.1),
+                          borderRadius: AppRadii.lgAll,
+                          border: Border.all(color: AppColors.lavender.withValues(alpha: 0.2)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'FUN FACT',
+                              style: AppTypography.label(fontSize: 10, color: AppColors.lavender),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              _funFact,
+                              style: AppTypography.body(fontSize: 13, color: AppColors.graphite),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Cancel button
+                    FlowButton(
                       label: 'Cancel',
                       variant: FlowButtonVariant.danger,
                       size: FlowButtonSize.sm,
                       onPressed: _handleCancel,
                     ),
-                  ),
-              ],
+                    const SizedBox(height: 20),
+                  ],
+                ),
+              ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _waitingView() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Breathing circle
-        const BreathingCircle(size: 100),
-        const SizedBox(height: 28),
-
-        const Pill(text: 'Finding someone', variant: PillVariant.accent, showDot: true),
-        const SizedBox(height: 16),
-        RichText(
-          textAlign: TextAlign.center,
-          text: TextSpan(style: AppTypography.display(fontSize: 36, color: AppColors.ink), children: [
-            const TextSpan(text: 'Your space\nis '),
-            TextSpan(text: 'ready.', style: TextStyle(fontStyle: FontStyle.italic, color: AppColors.accent)),
-          ]),
         ),
-        const SizedBox(height: 12),
-        Text('Someone will be here soon.', style: AppTypography.body(fontSize: 15, color: AppColors.slate), textAlign: TextAlign.center),
-        const SizedBox(height: 20),
-
-        if (!_loading) ...[
-          TimerWidget(remainingSeconds: _remaining, onEnd: _handleTimeout),
-          const SizedBox(height: 10),
-          Text('Most connections happen sooner than 5 minutes.', style: AppTypography.body(fontSize: 12, color: AppColors.mist), textAlign: TextAlign.center),
-        ] else
-          CircularProgressIndicator(color: AppColors.accent),
       ],
     );
   }
 
   Widget _timedOutView() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text('⏱', style: const TextStyle(fontSize: 48)),
-        const SizedBox(height: 20),
-        Text("Time's up.", style: AppTypography.heading(fontSize: 28, color: AppColors.ink)),
-        const SizedBox(height: 10),
-        Text('No one joined this time. You can try again.', style: AppTypography.body(fontSize: 14, color: AppColors.slate), textAlign: TextAlign.center),
-        const SizedBox(height: 28),
-        FlowButton(
-          label: _retrying ? 'Raising hand…' : 'Try again →',
-          onPressed: _retrying ? null : _handleRetry,
-          loading: _retrying,
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('⏱', style: const TextStyle(fontSize: 48)),
+            const SizedBox(height: 20),
+            Text("Time's up.", style: AppTypography.heading(fontSize: 28, color: AppColors.ink)),
+            const SizedBox(height: 10),
+            Text('No one joined this time. You can try again.', style: AppTypography.body(fontSize: 14, color: AppColors.slate), textAlign: TextAlign.center),
+            const SizedBox(height: 28),
+            FlowButton(
+              label: _retrying ? 'Raising hand…' : 'Try again →',
+              onPressed: _retrying ? null : _handleRetry,
+              loading: _retrying,
+            ),
+            const SizedBox(height: 12),
+            FlowButton(label: 'Back to home', variant: FlowButtonVariant.ghost, onPressed: () => context.go('/home')),
+          ],
         ),
-        const SizedBox(height: 12),
-        FlowButton(label: 'Back to home', variant: FlowButtonVariant.ghost, onPressed: () => context.go('/home')),
-      ],
+      ),
     );
   }
 }

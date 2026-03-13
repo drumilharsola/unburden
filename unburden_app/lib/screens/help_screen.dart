@@ -92,7 +92,7 @@ class HelpScreen extends StatelessWidget {
                         const SizedBox(height: 12),
                         Text(
                           'Get matched with licensed therapists for deeper, '
-                          'ongoing support — right from the app.',
+                          'ongoing support - right from the app.',
                           textAlign: TextAlign.center,
                           style: AppTypography.body(
                             fontSize: 14,
@@ -148,7 +148,7 @@ class HelpScreen extends StatelessWidget {
                             'Book sessions that fit your routine.'),
                         const SizedBox(height: 12),
                         _feature(Icons.chat_bubble_outline_rounded,
-                            'Text & voice options',
+                            'Text, voice & video call options',
                             'Choose how you want to communicate.'),
                       ],
                     ),

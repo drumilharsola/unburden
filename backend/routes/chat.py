@@ -282,8 +282,10 @@ async def list_chat_rooms(session: dict = Depends(require_auth)):
             if peer_session_id and peer_session_id in blocked_ids:
                 continue
             peer_profile = await get_profile(peer_session_id) if peer_session_id else None
+            role = "speaker" if room.get("user_a") == session_id else "listener"
             rooms.append({
                 "room_id": rid,
+                "role": role,
                 "status": room.get("status", "ended"),
                 "matched_at": room.get("matched_at", ""),
                 "started_at": room.get("started_at", ""),

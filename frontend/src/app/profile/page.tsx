@@ -82,7 +82,7 @@ function ProfileContent() {
   };
 
   // ══════════════════════════════════════════════════
-  // VIEW MODE — profile already set up
+  // VIEW MODE - profile already set up
   // ══════════════════════════════════════════════════
   // Wait for store to rehydrate before deciding which mode to render, so there
   // is no flash of the setup form for users who already have a profile.
@@ -105,7 +105,7 @@ function ProfileContent() {
           <div className="orb orb-a" style={{ position: "fixed" }} />
           <div className="orb orb-c" style={{ position: "fixed" }} />
 
-          {/* LEFT — avatar + identity */}
+          {/* LEFT - avatar + identity */}
           <div className="preview-panel" style={{
             padding: "60px 64px",
             display: "flex", flexDirection: "column",
@@ -151,7 +151,7 @@ function ProfileContent() {
             </button>
           </div>
 
-          {/* RIGHT — stats + edit */}
+          {/* RIGHT - stats + edit */}
           <div className="form-panel" style={{
             padding: "60px 64px",
             display: "flex", flexDirection: "column", justifyContent: "center",
@@ -306,7 +306,7 @@ function ProfileContent() {
   }
 
   // ══════════════════════════════════════════════════
-  // SETUP MODE — first time (no username yet)
+  // SETUP MODE - first time (no username yet)
   // ══════════════════════════════════════════════════
   const selectedAvatar = ALL_AVATARS.find((a) => a.id === setupAvatarId) ?? ALL_AVATARS[0];
 
