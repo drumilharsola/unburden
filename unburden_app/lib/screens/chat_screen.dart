@@ -8,7 +8,6 @@ import '../models/chat_message.dart';
 import '../services/avatars.dart';
 import '../state/auth_provider.dart';
 import '../state/chat_provider.dart';
-import '../widgets/flow_logo.dart';
 import '../widgets/flow_button.dart';
 import '../widgets/pill.dart';
 import '../widgets/timer_widget.dart';
@@ -30,16 +29,19 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _inputCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
+  final _inputFocus = FocusNode();
   bool _showReport = false;
   bool _showPeerProfile = false;
   bool _confirmingBlock = false;
   bool _blocking = false;
   bool _blocked = false;
+  TranscriptMessage? _replyTo;
 
   @override
   void dispose() {
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
+    _inputFocus.dispose();
     super.dispose();
   }
 
@@ -143,12 +145,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         bottom: false,
         child: Row(
           children: [
-            const FlowLogo(dark: true),
-            const Spacer(),
+            // Back button
+            IconButton(
+              icon: Icon(Icons.arrow_back_rounded, size: 20, color: AppColors.ink),
+              onPressed: () => context.go('/lobby'),
+            ),
+            const SizedBox(width: 4),
 
-            // Peer info center
+            // Peer info
             if (chat.peerUsername != null) ...[
-              GestureDetector(
+              Expanded(child: GestureDetector(
                 onTap: () => setState(() => _showPeerProfile = true),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -158,30 +164,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       child: CachedNetworkImage(imageUrl: avatarUrl(chat.peerAvatarId, size: 72), width: 36, height: 36),
                     ),
                     const SizedBox(width: 10),
-                    Column(
+                    Flexible(child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(chat.peerUsername!, style: AppTypography.ui(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)),
+                        Text(chat.peerUsername!, style: AppTypography.ui(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink), overflow: TextOverflow.ellipsis),
                         Text(
-                          chat.mode == 'readonly' ? 'Past conversations' : chat.connected ? 'Live · anonymous' : 'Connecting…',
+                          chat.mode == 'readonly' ? 'Past conversation' : chat.connected ? 'Live · anonymous' : 'Connecting…',
                           style: AppTypography.body(fontSize: 11, color: AppColors.slate),
                         ),
                       ],
-                    ),
+                    )),
                     if (chat.peerLeft) ...[
                       const SizedBox(width: 8),
-                      Text('disconnected', style: AppTypography.body(fontSize: 11, color: AppColors.danger)),
+                      Text('left', style: AppTypography.body(fontSize: 11, color: AppColors.danger)),
                     ],
                   ],
                 ),
-              ),
+              )),
             ] else
-              Text(
+              Expanded(child: Text(
                 chat.mode == 'checking' ? 'Loading…' : 'Waiting for someone…',
                 style: AppTypography.body(fontSize: 13, color: AppColors.slate),
-              ),
-
-            const Spacer(),
+              )),
 
             // Timer / actions
             if (chat.mode == 'live') ...[
@@ -221,12 +225,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 onPressed: () { notifier.leave(); context.go('/lobby'); },
               ),
             ],
-
-            // Back button (always)
-            IconButton(
-              icon: Text('←', style: TextStyle(fontSize: 16, color: AppColors.ink)),
-              onPressed: () => context.go('/lobby'),
-            ),
           ],
         ),
       ),
@@ -310,8 +308,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
-  Widget _buildBubble(TranscriptMessage msg, bool isMe) {
-    return Align(
+  Widget _buildBubble(TranscriptMessage msg, bool isMe, {bool canReply = true}) {
+    final bubble = Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Column(
         crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -320,6 +318,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             Padding(
               padding: const EdgeInsets.only(left: 4, bottom: 4),
               child: Text(msg.from, style: AppTypography.body(fontSize: 11, color: AppColors.slate)),
+            ),
+          // Reply preview
+          if (msg.replyText != null && msg.replyText!.isNotEmpty)
+            Container(
+              constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.72),
+              margin: const EdgeInsets.only(bottom: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: (isMe ? AppColors.venterBubble : AppColors.listenerBubble).withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(12),
+                border: Border(left: BorderSide(color: AppColors.accent, width: 3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(msg.replyFrom ?? '', style: AppTypography.ui(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.accent)),
+                  Text(msg.replyText!, style: AppTypography.body(fontSize: 11, color: AppColors.slate), maxLines: 2, overflow: TextOverflow.ellipsis),
+                ],
+              ),
             ),
           Container(
             constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.72),
@@ -343,6 +360,27 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ],
       ),
     );
+
+    if (!canReply) return bubble;
+
+    // Swipe-to-reply: swipe right to reply
+    return Dismissible(
+      key: ValueKey(msg.clientId ?? msg.ts),
+      direction: DismissDirection.startToEnd,
+      confirmDismiss: (_) async {
+        setState(() => _replyTo = msg);
+        _inputFocus.requestFocus();
+        return false; // don't actually dismiss
+      },
+      background: Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 16),
+          child: Icon(Icons.reply_rounded, color: AppColors.accent, size: 24),
+        ),
+      ),
+      child: bubble,
+    );
   }
 
   // ── Input bar ──
@@ -358,13 +396,43 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       child: SafeArea(
         top: false,
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
+            // Reply preview bar
+            if (_replyTo != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.08),
+                  borderRadius: AppRadii.mdAll,
+                  border: Border(left: BorderSide(color: AppColors.accent, width: 3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.reply_rounded, size: 16, color: AppColors.accent),
+                    const SizedBox(width: 8),
+                    Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_replyTo!.from, style: AppTypography.ui(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.accent)),
+                        Text(_replyTo!.text, style: AppTypography.body(fontSize: 12, color: AppColors.slate), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ],
+                    )),
+                    GestureDetector(
+                      onTap: () => setState(() => _replyTo = null),
+                      child: Icon(Icons.close_rounded, size: 18, color: AppColors.slate),
+                    ),
+                  ],
+                ),
+              ),
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Expanded(
                   child: TextField(
                     controller: _inputCtrl,
+                    focusNode: _inputFocus,
                     maxLines: 4,
                     minLines: 1,
                     textInputAction: TextInputAction.send,
@@ -382,8 +450,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     onChanged: (_) => notifier.resetTypingTimer(),
                     onSubmitted: (text) {
                       if (text.trim().isNotEmpty) {
-                        notifier.sendMessage(text.trim());
+                        notifier.sendMessage(text.trim(), replyTo: _replyTo);
                         _inputCtrl.clear();
+                        setState(() => _replyTo = null);
                       }
                     },
                   ),
@@ -393,8 +462,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   onTap: () {
                     final text = _inputCtrl.text.trim();
                     if (text.isNotEmpty && !disabled) {
-                      notifier.sendMessage(text);
+                      notifier.sendMessage(text, replyTo: _replyTo);
                       _inputCtrl.clear();
+                      setState(() => _replyTo = null);
                     }
                   },
                   child: AnimatedOpacity(
@@ -410,7 +480,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ],
             ),
             const SizedBox(height: 6),
-            Text('Enter to send · Leave any time', style: AppTypography.body(fontSize: 10, color: AppColors.mist)),
+            Text('Enter to send · Swipe to reply', style: AppTypography.body(fontSize: 10, color: AppColors.mist)),
           ],
         ),
       ),

@@ -195,6 +195,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
           text: data['text'] as String,
           ts: (data['ts'] as num).toDouble(),
           clientId: data['client_id'] as String?,
+          replyTo: data['reply_to'] as String?,
+          replyText: data['reply_text'] as String?,
+          replyFrom: data['reply_from'] as String?,
         );
         state = state.copyWith(transcript: _merge(state.transcript, [msg]));
         if (msg.from != username) {
@@ -245,12 +248,26 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   // ── Actions ──
 
-  void sendMessage(String text) {
+  void sendMessage(String text, {TranscriptMessage? replyTo}) {
     if (text.isEmpty || _channel == null || _username == null) return;
     final clientId = 'msg-${DateTime.now().millisecondsSinceEpoch}-${text.hashCode.toRadixString(36)}';
-    final optimistic = TranscriptMessage(from: _username!, text: text, ts: (DateTime.now().millisecondsSinceEpoch / 1000), clientId: clientId);
+    final optimistic = TranscriptMessage(
+      from: _username!,
+      text: text,
+      ts: (DateTime.now().millisecondsSinceEpoch / 1000),
+      clientId: clientId,
+      replyTo: replyTo?.clientId,
+      replyText: replyTo?.text,
+      replyFrom: replyTo?.from,
+    );
     state = state.copyWith(transcript: _merge(state.transcript, [optimistic]));
-    _channel!.sink.add(jsonEncode({'type': 'message', 'text': text, 'client_id': clientId}));
+    final payload = <String, dynamic>{'type': 'message', 'text': text, 'client_id': clientId};
+    if (replyTo?.clientId != null) {
+      payload['reply_to'] = replyTo!.clientId;
+      payload['reply_text'] = replyTo.text;
+      payload['reply_from'] = replyTo.from;
+    }
+    _channel!.sink.add(jsonEncode(payload));
     _stopTyping();
   }
 

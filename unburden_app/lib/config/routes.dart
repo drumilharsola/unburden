@@ -12,6 +12,7 @@ import '../screens/lobby_screen.dart';
 import '../screens/waiting_screen.dart';
 import '../screens/chat_screen.dart';
 import '../screens/history_screen.dart';
+import '../screens/board_screen.dart';
 import '../screens/not_found_screen.dart';
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_reports_screen.dart';
@@ -106,6 +107,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         final tab = state.uri.queryParameters['tab'];
         return HistoryScreen(tab: tab);
       }),
+      GoRoute(path: '/board', builder: (_, __) => const BoardScreen()),
       GoRoute(path: '/admin', builder: (_, __) => const AdminDashboardScreen()),
       GoRoute(path: '/admin/analytics', builder: (_, __) => const AdminAnalyticsScreen()),
       GoRoute(path: '/admin/reports', builder: (_, __) => const AdminReportsScreen()),

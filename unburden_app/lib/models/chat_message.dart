@@ -54,8 +54,11 @@ class TranscriptMessage extends TranscriptItem {
   @override
   final double ts;
   final String? clientId;
+  final String? replyTo;     // clientId of the message being replied to
+  final String? replyText;   // preview text of the replied message
+  final String? replyFrom;   // author of the replied message
 
-  TranscriptMessage({required this.from, required this.text, required this.ts, this.clientId});
+  TranscriptMessage({required this.from, required this.text, required this.ts, this.clientId, this.replyTo, this.replyText, this.replyFrom});
 }
 
 class TranscriptMarker extends TranscriptItem {

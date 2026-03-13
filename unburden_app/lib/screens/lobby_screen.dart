@@ -12,20 +12,13 @@ import '../models/room_summary.dart';
 import '../services/api_client.dart';
 import '../services/avatars.dart';
 import '../state/auth_provider.dart';
+import '../state/pending_wait_provider.dart';
 import '../widgets/flow_logo.dart';
 import '../widgets/flow_button.dart';
 import '../widgets/pill.dart';
-import '../widgets/timer_widget.dart';
-import '../widgets/wellbeing_poster.dart';
 
 // ── Helpers ──
 
-String _timeAgo(String postedAt) {
-  final secs = (DateTime.now().millisecondsSinceEpoch ~/ 1000) - (int.tryParse(postedAt) ?? 0);
-  if (secs < 60) return 'just now';
-  if (secs < 3600) return '${secs ~/ 60}m ago';
-  return '${secs ~/ 3600}h ago';
-}
 
 class _GroupedRoom {
   final RoomSummary latest;
@@ -62,12 +55,8 @@ class LobbyScreen extends ConsumerStatefulWidget {
 class _LobbyScreenState extends ConsumerState<LobbyScreen> {
   List<SpeakerRequest> _board = [];
   List<RoomSummary> _rooms = [];
-  String? _accepting;
   String _error = '';
   bool _ventLoading = false;
-  bool _refreshing = false;
-  String? _pendingRequestId;
-  int? _pendingRemaining;
   bool _resendLoading = false;
   bool _resendDone = false;
 
@@ -79,13 +68,15 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
   @override
   void initState() {
     super.initState();
-    _pendingRequestId = widget.requestId;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _syncBoard();
       _syncRooms();
       _connectWs();
       _roomSyncTimer = Timer.periodic(const Duration(seconds: 5), (_) => _syncRooms());
-      if (_pendingRequestId != null) _syncPendingRequest();
+      // If there's a pending request from the route, start global waiting
+      if (widget.requestId != null) {
+        ref.read(pendingWaitProvider.notifier).startWaiting(widget.requestId!);
+      }
     });
   }
 
@@ -109,7 +100,6 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
       if (!mounted) return;
       setState(() {
         _board = _filterOwn(res.requests);
-        _pendingRequestId = res.myRequestId;
       });
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
@@ -123,29 +113,6 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
       final res = await ref.read(apiClientProvider).getChatRooms(token);
       if (mounted) setState(() => _rooms = res);
     } catch (_) {}
-  }
-
-  Future<void> _syncPendingRequest() async {
-    final token = _token;
-    final rid = _pendingRequestId;
-    if (token == null || rid == null) return;
-    try {
-      final req = await ref.read(apiClientProvider).getSpeakerRequest(token, rid);
-      if (!mounted) return;
-      if (req.status == 'matched' && req.roomId != null) {
-        setState(() { _pendingRequestId = null; _pendingRemaining = null; });
-        context.go('/chat?room_id=${Uri.encodeComponent(req.roomId!)}');
-        return;
-      }
-      if (req.postedAt == null) {
-        setState(() { _pendingRequestId = null; _pendingRemaining = null; });
-        return;
-      }
-      final elapsed = (DateTime.now().millisecondsSinceEpoch ~/ 1000) - (int.tryParse(req.postedAt!) ?? 0);
-      setState(() => _pendingRemaining = (300 - elapsed).clamp(0, 300));
-    } catch (_) {
-      if (mounted) setState(() { _pendingRequestId = null; _pendingRemaining = null; });
-    }
   }
 
   void _connectWs() {
@@ -172,7 +139,6 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
           final list = (msg['requests'] as List?)?.map((e) => SpeakerRequest.fromJson(e as Map<String, dynamic>)).toList() ?? [];
           setState(() {
             _board = _filterOwn(list);
-            _pendingRequestId = msg['my_request_id'] as String?;
           });
           return;
         }
@@ -273,6 +239,7 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
     setState(() { _error = ''; _ventLoading = true; });
     try {
       final res = await ref.read(apiClientProvider).postSpeak(token);
+      ref.read(pendingWaitProvider.notifier).startWaiting(res.requestId);
       _ws?.sink.close();
       if (mounted) context.go('/waiting?request_id=${Uri.encodeComponent(res.requestId)}');
     } on AuthException {
@@ -283,28 +250,6 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
     }
   }
 
-  Future<void> _handleAccept(String requestId) async {
-    final token = _token;
-    if (token == null) return;
-    if (!await _showSafetyDialog()) return;
-    setState(() { _accepting = requestId; _error = ''; });
-    try {
-      final res = await ref.read(apiClientProvider).acceptSpeaker(token, requestId);
-      if (mounted) context.go('/chat?room_id=${Uri.encodeComponent(res.roomId)}');
-    } on AuthException {
-      ref.read(authProvider.notifier).clear();
-      if (mounted) context.go('/verify');
-    } catch (e) {
-      if (mounted) setState(() { _error = e.toString(); _accepting = null; });
-    }
-  }
-
-  Future<void> _handleCancelPending() async {
-    final token = _token;
-    if (token == null) return;
-    try { await ref.read(apiClientProvider).cancelSpeak(token); } catch (_) {}
-    setState(() { _pendingRequestId = null; _pendingRemaining = null; _error = ''; });
-  }
 
   void _handleSignOut() {
     _ws?.sink.close();
@@ -377,31 +322,21 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
                     _ventCard(),
                     const SizedBox(height: 14),
 
-                    // Listen card
+                    // Listen card → opens board page
                     _listenCard(auth),
                     const SizedBox(height: 14),
 
-                    // Character illustration
-                    const Center(
-                      child: CharacterCluster(mood: PosterMood.bloom, compact: false),
-                    ),
+                    // Chat history → opens history page
+                    _chatHistoryCard(groupedRooms),
                     const SizedBox(height: 14),
 
-                    // Board
-                    _boardSection(auth),
-                    const SizedBox(height: 28),
-
-                    // Chat history sidebar (inline on mobile)
-                    _historySection(groupedRooms),
+                    // Email verify banner if needed
+                    if (auth.emailVerified != true) _emailVerifyBanner(),
                   ]),
                 ),
               ),
             ],
           ),
-
-          // Pending request toast
-          if (_pendingRequestId != null && _pendingRemaining != null && _pendingRemaining! > 0)
-            _pendingToast(),
         ],
       ),
     );
@@ -489,89 +424,96 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
   }
 
   Widget _listenCard(AuthState auth) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: AppRadii.lgAll,
-        border: Border.all(color: Colors.black.withValues(alpha: 0.07), width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  const Text('👂', style: TextStyle(fontSize: 18)),
-                  const SizedBox(width: 8),
-                  const Pill(text: 'I want to listen', variant: PillVariant.plain),
-                ]),
-                const SizedBox(height: 12),
-                Text('Be present.', style: AppTypography.title(fontSize: 18, color: AppColors.ink)),
-                const SizedBox(height: 6),
-                Text('Pick someone below, then enter one calm anonymous conversation.', style: AppTypography.body(fontSize: 13, color: AppColors.slate)),
-              ]),
-              FlowButton(
-                label: _refreshing ? 'Refreshing…' : 'Reload',
-                variant: FlowButtonVariant.ghost,
-                size: FlowButtonSize.sm,
-                onPressed: (auth.emailVerified != true || _refreshing) ? null : () async {
-                  setState(() => _refreshing = true);
-                  await _syncBoard();
-                  if (mounted) setState(() => _refreshing = false);
-                },
+    return GestureDetector(
+      onTap: auth.emailVerified != true ? null : () => context.go('/board'),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: AppRadii.lgAll,
+          border: Border.all(color: Colors.black.withValues(alpha: 0.07), width: 1.5),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.accent.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(14),
               ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            _board.isNotEmpty ? '${_board.length} ${_board.length == 1 ? "person" : "people"} want to be heard' : 'no one venting right now',
-            style: AppTypography.label(color: AppColors.slate),
-          ),
-          if (auth.emailVerified != true)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text('Locked until your email is verified.', style: AppTypography.body(fontSize: 12, color: AppColors.danger)),
+              child: const Text('👂', style: TextStyle(fontSize: 22)),
             ),
-        ],
+            const SizedBox(width: 16),
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('I want to listen', style: AppTypography.title(fontSize: 18, color: AppColors.ink)),
+                const SizedBox(height: 4),
+                Text(
+                  _board.isNotEmpty
+                      ? '${_board.length} ${_board.length == 1 ? "person" : "people"} waiting to be heard'
+                      : 'See who needs a listener',
+                  style: AppTypography.body(fontSize: 13, color: AppColors.slate),
+                ),
+                if (auth.emailVerified != true)
+                  Text('Verify email to unlock', style: AppTypography.body(fontSize: 11, color: AppColors.danger)),
+              ],
+            )),
+            Icon(Icons.arrow_forward_ios_rounded, size: 16, color: AppColors.slate),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _boardSection(AuthState auth) {
-    if (!auth.emailVerified! && _board.isEmpty) return const SizedBox.shrink();
-
-    if (auth.emailVerified != true) {
-      return _emailVerifyBanner();
-    }
-
-    if (_board.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(48),
+  Widget _chatHistoryCard(List<_GroupedRoom> grouped) {
+    final activeCount = grouped.where((g) => g.latest.status == 'active').length;
+    return GestureDetector(
+      onTap: () => context.go('/history'),
+      child: Container(
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          borderRadius: AppRadii.mdAll,
-          border: Border.all(color: Colors.black12, style: BorderStyle.solid),
           color: Colors.white,
+          borderRadius: AppRadii.lgAll,
+          border: Border.all(color: Colors.black.withValues(alpha: 0.07), width: 1.5),
         ),
-        child: Column(
+        child: Row(
           children: [
-            Text('All quiet right now.', style: AppTypography.ui(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.charcoal)),
-            const SizedBox(height: 6),
-            Text('Stay here and new requests will appear automatically.', style: AppTypography.body(fontSize: 13, color: AppColors.slate)),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.lavender.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Text('💬', style: TextStyle(fontSize: 22)),
+            ),
+            const SizedBox(width: 16),
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Conversations', style: AppTypography.title(fontSize: 18, color: AppColors.ink)),
+                const SizedBox(height: 4),
+                Text(
+                  grouped.isEmpty
+                      ? 'No conversations yet'
+                      : activeCount > 0
+                          ? '$activeCount active · ${grouped.length} total'
+                          : '${grouped.length} past ${grouped.length == 1 ? "chat" : "chats"}',
+                  style: AppTypography.body(fontSize: 13, color: AppColors.slate),
+                ),
+              ],
+            )),
+            if (activeCount > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(12)),
+                child: Text('$activeCount', style: AppTypography.ui(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+              ),
+            const SizedBox(width: 8),
+            Icon(Icons.arrow_forward_ios_rounded, size: 16, color: AppColors.slate),
           ],
         ),
-      );
-    }
-
-    return Column(
-      children: _board.map((req) => _VentCard(
-        req: req,
-        accepting: _accepting == req.requestId,
-        locked: auth.emailVerified != true,
-        onAccept: () => _handleAccept(req.requestId),
-      )).toList(),
+      ),
     );
   }
 
@@ -586,7 +528,7 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
       ),
       child: Row(
         children: [
-          Expanded(child: Text('🔒 Verify your email to answer requests.', style: AppTypography.body(fontSize: 13, color: AppColors.slate))),
+          Expanded(child: Text('🔒 Verify your email to unlock all features.', style: AppTypography.body(fontSize: 13, color: AppColors.slate))),
           FlowButton(
             label: _resendDone ? 'Sent ✓' : _resendLoading ? 'Sending…' : 'Resend email',
             size: FlowButtonSize.sm,
@@ -601,150 +543,4 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
     );
   }
 
-  Widget _historySection(List<_GroupedRoom> grouped) {
-    if (grouped.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(28),
-        decoration: BoxDecoration(borderRadius: AppRadii.lgAll, color: Colors.white, border: Border.all(color: Colors.black.withValues(alpha: 0.08))),
-        child: Column(children: [
-          Text('No chat history yet.', style: AppTypography.ui(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.charcoal)),
-          const SizedBox(height: 6),
-          Text('Your recent connections will appear here for 7 days.', style: AppTypography.body(fontSize: 12, color: AppColors.slate)),
-        ]),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(borderRadius: AppRadii.lgAll, color: Colors.white.withValues(alpha: 0.8), border: Border.all(color: Colors.black.withValues(alpha: 0.08))),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('CHAT HISTORY', style: AppTypography.label(color: AppColors.slate)),
-              if (grouped.length > 2)
-                TextButton(onPressed: () => context.go('/history'), child: Text('View all', style: AppTypography.ui(fontSize: 12, color: AppColors.slate))),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ...grouped.take(2).map((g) => _historyTile(g)),
-        ],
-      ),
-    );
-  }
-
-  Widget _historyTile(_GroupedRoom g) {
-    final r = g.latest;
-    return GestureDetector(
-      onTap: () {
-        final params = 'room_id=${Uri.encodeComponent(r.roomId)}${r.peerSessionId.isNotEmpty ? "&peer_session_id=${Uri.encodeComponent(r.peerSessionId)}" : ""}';
-        context.go('/chat?$params');
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-        child: Row(
-          children: [
-            ClipOval(child: CachedNetworkImage(imageUrl: avatarUrl(r.peerAvatarId, size: 68), width: 34, height: 34)),
-            const SizedBox(width: 10),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(r.peerUsername, style: AppTypography.ui(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink)),
-              Text(g.count == 1 ? '1 session' : '${g.count} sessions', style: AppTypography.body(fontSize: 11, color: AppColors.slate)),
-            ])),
-            if (r.status == 'active')
-              Container(width: 7, height: 7, decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.accent)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _pendingToast() {
-    return Positioned(
-      right: 20,
-      bottom: 20,
-      child: Container(
-        width: 320,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: AppColors.ink.withValues(alpha: 0.92),
-          borderRadius: AppRadii.lgAll,
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.28), blurRadius: 40, offset: const Offset(0, 18))],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Waiting for someone to join', style: AppTypography.ui(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
-                  const SizedBox(height: 4),
-                  Text('Most connections happen sooner.', style: AppTypography.body(fontSize: 12, color: AppColors.slate)),
-                ]),
-                FlowButton(
-                  label: 'Expand',
-                  variant: FlowButtonVariant.ghost,
-                  size: FlowButtonSize.sm,
-                  onPressed: () => context.go('/waiting?request_id=${Uri.encodeComponent(_pendingRequestId!)}'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                TimerWidget(remainingSeconds: _pendingRemaining!, onEnd: _handleCancelPending),
-                FlowButton(label: 'Cancel', variant: FlowButtonVariant.ghost, size: FlowButtonSize.sm, onPressed: _handleCancelPending),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Vent card ──
-
-class _VentCard extends StatelessWidget {
-  final SpeakerRequest req;
-  final bool accepting;
-  final bool locked;
-  final VoidCallback onAccept;
-
-  const _VentCard({required this.req, required this.accepting, required this.locked, required this.onAccept});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: AppRadii.mdAll,
-        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 16, offset: const Offset(0, 2))],
-      ),
-      child: Row(
-        children: [
-          ClipOval(child: CachedNetworkImage(imageUrl: avatarUrl(req.avatarId, size: 84), width: 42, height: 42)),
-          const SizedBox(width: 14),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(req.username, style: AppTypography.ui(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)),
-            Text('needs to be heard · ${_timeAgo(req.postedAt)}', style: AppTypography.body(fontSize: 12, color: AppColors.slate)),
-            if (locked) Text('Verify your email to answer this request.', style: AppTypography.body(fontSize: 11, color: AppColors.slate)),
-          ])),
-          FlowButton(
-            label: locked ? 'Locked' : accepting ? '…' : 'Show up',
-            size: FlowButtonSize.sm,
-            onPressed: accepting || locked ? null : onAccept,
-          ),
-        ],
-      ),
-    );
-  }
 }
