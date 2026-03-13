@@ -1,0 +1,9 @@
+{
+  "installCommand": "git clone --depth 1 --branch stable https://github.com/flutter/flutter.git /vercel/.flutter-sdk && export PATH=/vercel/.flutter-sdk/bin:$PATH && flutter --version && cd unburden_app && flutter pub get",
+  "buildCommand": "export PATH=/vercel/.flutter-sdk/bin:$PATH && cd unburden_app && flutter build web --release --dart-define=API_BASE_URL=$API_BASE_URL",
+  "outputDirectory": "unburden_app/build/web",
+  "framework": null,
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
