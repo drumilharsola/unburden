@@ -27,7 +27,8 @@ class _TimerWidgetState extends State<TimerWidget> {
   @override
   void didUpdateWidget(TimerWidget old) {
     super.didUpdateWidget(old);
-    if (old.remainingSeconds != widget.remainingSeconds) {
+    // Only resync if the server value differs by more than 2s (avoids jitter)
+    if ((old.remainingSeconds - widget.remainingSeconds).abs() > 2) {
       _secs = widget.remainingSeconds;
     }
   }

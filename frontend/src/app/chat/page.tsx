@@ -289,17 +289,11 @@ function ChatContent() {
           break;
 
         case "timer_status":
-          if (data.started && !timerStartedRef.current) {
-            appendSessionMarkerRef.current("started");
-          }
           setTimerStarted(data.started);
           setRemaining(data.remaining);
           break;
 
         case "tick":
-          if (!timerStartedRef.current) {
-            appendSessionMarkerRef.current("started");
-          }
           setTimerStarted(true);
           setRemaining(data.remaining);
           break;
@@ -662,11 +656,7 @@ function ChatContent() {
             );
           }
 
-          // If we know the peer, use peer-exclusion - more reliable than comparing
-          // against the Zustand username which can be stale after a re-roll.
-          const isMe = peerUsername
-            ? msg.from !== peerUsername
-            : msg.from === username;
+          const isMe = msg.from === username;
           return (
             <div key={i} className="msg-enter" style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start" }}>
               {!isMe && (

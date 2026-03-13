@@ -34,7 +34,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   int _speakCount = 0;
   int _listenCount = 0;
   String _memberSince = '';
-  bool _showDeleteConfirm = false;
   bool _deleting = false;
   bool? _emailVerified;
   bool _verificationSending = false;
@@ -115,10 +114,79 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     try {
       await ref.read(apiClientProvider).deleteAccount(token);
       await ref.read(authProvider.notifier).clear();
-      if (mounted) context.go('/');
+      if (mounted) {
+        Navigator.of(context).pop(); // dismiss sheet
+        context.go('/');
+      }
     } catch (_) {
-      if (mounted) setState(() { _deleting = false; _showDeleteConfirm = false; });
+      if (mounted) setState(() => _deleting = false);
     }
+  }
+
+  void _showDeleteSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Container(
+          decoration: BoxDecoration(
+            color: AppColors.snow.withValues(alpha: 0.95),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(ctx).padding.bottom + 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(color: AppColors.mist, borderRadius: BorderRadius.circular(2)),
+              ),
+              const SizedBox(height: 20),
+              Icon(Icons.warning_amber_rounded, color: AppColors.danger, size: 40),
+              const SizedBox(height: 12),
+              Text('Delete your account?',
+                  style: AppTypography.title(fontSize: 18, color: AppColors.ink)),
+              const SizedBox(height: 10),
+              Text(
+                'This will permanently delete your profile, chat history, and all associated data. This action cannot be undone.',
+                style: AppTypography.body(fontSize: 13, color: AppColors.slate),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _deleting ? null : () {
+                    _handleDeleteAccount();
+                    setSheetState(() {});
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.danger,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Text(_deleting ? 'Deleting…' : 'Yes, delete everything',
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: Text('Cancel', style: AppTypography.ui(fontSize: 15, color: AppColors.slate)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -348,7 +416,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 220),
                 child: OutlinedButton(
-                  onPressed: () => setState(() => _showDeleteConfirm = true),
+                  onPressed: _showDeleteSheet,
                   style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
                   child: const Text('Delete account'),
                 ),
@@ -382,47 +450,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 },
               ),
             ),
-            if (_showDeleteConfirm) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                color: AppColors.danger.withValues(alpha: 0.08),
-                border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
-                borderRadius: AppRadii.smAll,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Delete your account?',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'This will permanently delete your profile, chat history, and all associated data. This action cannot be undone.',
-                      style: TextStyle(fontSize: 13, color: AppColors.ink.withValues(alpha: 0.6), height: 1.5),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => setState(() => _showDeleteConfirm = false),
-                          child: const Text('Cancel'),
-                        ),
-                        const SizedBox(width: 12),
-                        ElevatedButton(
-                          onPressed: _deleting ? null : _handleDeleteAccount,
-                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
-                          child: Text(_deleting ? 'Deleting…' : 'Yes, delete everything'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
           ],
         ],
       ),

@@ -128,8 +128,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
       clientId: m.clientId,
     )).toList();
 
+    // Add 'started' marker at matched_at time (when the room was created)
+    final matchedTs = double.tryParse(data.matchedAt) ?? 0;
+    final hasStartedMarker = state.transcript.any((t) => t is TranscriptMarker && t.event == 'started' && t.roomId == roomId);
+    final List<TranscriptItem> extra = [];
+    if (matchedTs > 0 && !hasStartedMarker) {
+      extra.add(TranscriptMarker(event: 'started', roomId: roomId, ts: matchedTs));
+    }
+
     state = state.copyWith(
-      transcript: _merge(state.transcript, msgs),
+      transcript: _merge(state.transcript, [...extra, ...msgs]),
       peerUsername: data.peerUsername.isNotEmpty ? data.peerUsername : state.peerUsername,
       peerAvatarId: data.peerAvatarId,
       peerSessionId: data.peerSessionId.isNotEmpty ? data.peerSessionId : state.peerSessionId,
@@ -215,14 +223,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
       case 'timer_status':
         final started = data['started'] as bool? ?? false;
-        if (started && !state.timerStarted) {
-          _appendMarker('started');
-        }
         state = state.copyWith(timerStarted: started, remaining: (data['remaining'] as num).toInt());
         break;
 
       case 'tick':
-        if (!state.timerStarted) _appendMarker('started');
         state = state.copyWith(timerStarted: true, remaining: (data['remaining'] as num).toInt());
         break;
 
@@ -335,7 +339,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 
   void _startSyncTimer() {
-    _syncTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) async {
+    _syncTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
       if (_disposed || state.mode != 'live') return;
       try {
         final token = _token;
