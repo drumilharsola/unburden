@@ -72,12 +72,25 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
       _syncBoard();
       _syncRooms();
       _connectWs();
+      _refreshEmailVerified();
       _roomSyncTimer = Timer.periodic(const Duration(seconds: 5), (_) => _syncRooms());
       // If there's a pending request from the route, start global waiting
       if (widget.requestId != null) {
         ref.read(pendingWaitProvider.notifier).startWaiting(widget.requestId!);
       }
     });
+  }
+
+  /// Sync email_verified from the server (user may have verified in browser).
+  Future<void> _refreshEmailVerified() async {
+    final auth = ref.read(authProvider);
+    if (auth.emailVerified == true || auth.token == null) return;
+    try {
+      final me = await ref.read(apiClientProvider).getMe(auth.token!);
+      if (me.emailVerified == true) {
+        ref.read(authProvider.notifier).setEmailVerified(true);
+      }
+    } catch (_) {}
   }
 
   @override

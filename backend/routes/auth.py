@@ -17,7 +17,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, field_validator
 from passlib.context import CryptContext
-from sqlalchemy import select, update
+from sqlalchemy import select, update, delete as sa_delete
 
 from config import get_settings
 from services.otp import get_email_hash
@@ -28,7 +28,7 @@ from services.session import save_profile, get_profile, set_email_verified, get_
 from middleware.jwt_auth import require_auth
 from db.redis_client import get_redis
 from db.postgres_client import get_session_factory
-from db.models import User, Profile
+from db.models import User, Profile, BlockedUser
 
 logger = logging.getLogger(__name__)
 
@@ -456,3 +456,66 @@ async def reset_password(body: ResetPasswordRequest):
         await db.commit()
 
     return {"message": "Password has been reset. You can now sign in."}
+
+
+# ─── GDPR / Account Management ───────────────────────────────────────────────
+
+@router.get("/export")
+async def export_data(payload: dict = Depends(require_auth)):
+    """Export all user data (GDPR compliance)."""
+    session_id = payload["sub"]
+
+    factory = get_session_factory()
+    async with factory() as db:
+        user = await db.get(User, session_id)
+        result = await db.execute(
+            select(BlockedUser).where(BlockedUser.blocker_session_id == session_id)
+        )
+        blocks = result.scalars().all()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    profile = await get_profile(session_id)
+
+    return {
+        "account": {
+            "session_id": user.session_id,
+            "email": user.email,
+            "created_at": user.created_at,
+        },
+        "profile": profile,
+        "blocked_users": [
+            {
+                "blocked_session_id": b.blocked_session_id,
+                "username": b.username,
+                "blocked_at": b.blocked_at,
+            }
+            for b in blocks
+        ],
+    }
+
+
+@router.delete("/account")
+async def delete_account(payload: dict = Depends(require_auth)):
+    """Permanently delete the user account and all associated data."""
+    session_id = payload["sub"]
+
+    factory = get_session_factory()
+    async with factory() as db:
+        # Cascade deletes profile and blocked_users via FK constraints
+        user = await db.get(User, session_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="Account not found")
+        await db.delete(user)
+        await db.commit()
+
+    # Clean up any remaining Redis ephemeral data
+    redis = await get_redis()
+    pipe = redis.pipeline(transaction=False)
+    pipe.delete(f"early_email_verified:{session_id}")
+    pipe.delete(f"history:{session_id}")
+    pipe.delete(f"active_rooms:{session_id}")
+    await pipe.execute()
+
+    return {"message": "Account deleted"}

@@ -36,6 +36,11 @@ async def save_profile(
     avatar_id: int = 0,
     age_verified: bool = True,
 ) -> None:
+    # Check if email was verified before profile creation (Redis flag)
+    redis = await get_redis()
+    early_verified = await redis.get(f"early_email_verified:{session_id}")
+    initial_verified = bool(early_verified)
+
     factory = get_session_factory()
     async with factory() as db:
         stmt = pg_insert(Profile).values(
@@ -43,7 +48,7 @@ async def save_profile(
             username=username,
             avatar_id=avatar_id,
             age_verified=age_verified,
-            email_verified=False,
+            email_verified=initial_verified,
             speak_count=0,
             listen_count=0,
             created_at=int(time.time()),
@@ -54,15 +59,22 @@ async def save_profile(
         await db.execute(stmt)
         await db.commit()
 
+    if early_verified:
+        await redis.delete(f"early_email_verified:{session_id}")
+
 
 async def set_email_verified(session_id: str) -> None:
-    """Mark a session's email as verified in the profiles table."""
+    """Mark a session's email as verified. If profile doesn't exist yet, store a Redis flag."""
     factory = get_session_factory()
     async with factory() as db:
-        await db.execute(
+        result = await db.execute(
             update(Profile).where(Profile.session_id == session_id).values(email_verified=True)
         )
         await db.commit()
+        if result.rowcount == 0:
+            # Profile not created yet — store flag in Redis for save_profile to pick up
+            redis = await get_redis()
+            await redis.setex(f"early_email_verified:{session_id}", 86400, "1")
 
 
 async def get_profile(session_id: str) -> Optional[dict]:

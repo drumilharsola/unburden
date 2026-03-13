@@ -114,8 +114,21 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
       _syncRooms();
       _syncBoard();
       _connectBoardWs();
+      _refreshEmailVerified();
       _roomSyncTimer = Timer.periodic(const Duration(seconds: 5), (_) => _syncRooms());
     });
+  }
+
+  /// Sync email_verified from the server (user may have verified in browser).
+  Future<void> _refreshEmailVerified() async {
+    final auth = ref.read(authProvider);
+    if (auth.emailVerified == true || auth.token == null) return;
+    try {
+      final me = await ref.read(apiClientProvider).getMe(auth.token!);
+      if (me.emailVerified == true) {
+        ref.read(authProvider.notifier).setEmailVerified(true);
+      }
+    } catch (_) {}
   }
 
   @override
