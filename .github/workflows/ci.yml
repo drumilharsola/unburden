@@ -102,6 +102,32 @@ jobs:
           name: flutter-coverage
           path: ventigo_app/coverage/
 
+      - name: Convert LCOV to SonarCloud generic coverage XML
+        run: |
+          python3 -c "
+          import re, sys
+          lcov = open('ventigo_app/coverage/lcov.info').read()
+          out = ['<coverage version=\"1\">']
+          for block in lcov.strip().split('end_of_record'):
+              block = block.strip()
+              if not block: continue
+              sf = re.search(r'SF:(.*)', block)
+              if not sf: continue
+              path = sf.group(1).strip()
+              # make path relative to workspace
+              if '/lib/' in path:
+                  path = 'ventigo_app/lib/' + path.split('/lib/', 1)[1]
+              out.append(f'  <file path=\"{path}\">')
+              for m in re.finditer(r'DA:(\d+),(\d+)', block):
+                  line, hits = m.group(1), m.group(2)
+                  covered = 'true' if int(hits) > 0 else 'false'
+                  out.append(f'    <lineToCover lineNumber=\"{line}\" covered=\"{covered}\"/>')
+              out.append('  </file>')
+          out.append('</coverage>')
+          open('ventigo_app/coverage/coverage.xml', 'w').write('\n'.join(out))
+          print('Converted lcov.info -> coverage.xml')
+          "
+
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v6
         env:
@@ -113,4 +139,4 @@ jobs:
             -Dsonar.sources=backend,ventigo_app/lib
             -Dsonar.tests=backend/tests,ventigo_app/test
             -Dsonar.python.coverage.reportPaths=backend/coverage.xml
-            -Dsonar.coverageReportPaths=ventigo_app/coverage/lcov.info
+            -Dsonar.coverageReportPaths=ventigo_app/coverage/coverage.xml
