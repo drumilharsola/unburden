@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"    # Flutter web app (Vercel)
 
     REDIS_URL: str = "redis://localhost:6379/0"
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/ventigo"
+    DATABASE_URL: str = ""  # set via env var or backend/.env
 
     # ── Brevo (transactional email) ─────────────────────────────────────────
     BREVO_API_KEY: str = ""

@@ -19,9 +19,9 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: ventigo
-      POSTGRES_USER: ventigo
-      POSTGRES_PASSWORD: dev_password
+      POSTGRES_DB: ${POSTGRES_DB:-ventigo}
+      POSTGRES_USER: ${POSTGRES_USER:-ventigo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
@@ -46,7 +46,7 @@ services:
         condition: service_healthy
     environment:
       - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=postgresql+asyncpg://ventigo:dev_password@postgres:5432/ventigo
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-ventigo}:${POSTGRES_PASSWORD:?err}@postgres:5432/${POSTGRES_DB:-ventigo}
 
   frontend:
     build:
