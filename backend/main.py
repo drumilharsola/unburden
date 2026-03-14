@@ -123,6 +123,12 @@ app.include_router(report_router)
 app.include_router(posts_router)
 
 
+# ── Debug: Sentry test (remove after confirming) ─────────────────────────────
+@app.get("/debug-sentry", tags=["meta"])
+async def debug_sentry():
+    raise RuntimeError("Sentry test — this error confirms the integration works!")
+
+
 # ── Health ────────────────────────────────────────────────────────────────────
 @app.get("/health", tags=["meta"])
 async def health():
