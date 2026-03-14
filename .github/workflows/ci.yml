@@ -114,3 +114,60 @@ jobs:
             -Dsonar.tests=backend/tests,ventigo_app/test
             -Dsonar.python.coverage.reportPaths=backend/coverage.xml
             -Dsonar.coverageReportPaths=ventigo_app/coverage/lcov.info
+
+  # ── 5. Deploy backend to Railway ────────────────────────────────────────────
+  deploy-backend:
+    name: Deploy → Railway
+    needs: [security, test-backend]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        run: railway up --service ${{ secrets.RAILWAY_SERVICE_ID }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+  # ── 6. Vercel deploys automatically after CI passes (Wait for CI enabled) ──
+
+  # ── 7. Build Android APK via Codemagic ──────────────────────────────────────
+  build-android:
+    name: Build → Android (Codemagic)
+    needs: [security, test-flutter]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Codemagic Android build
+        run: |
+          curl -s -X POST \
+            "https://api.codemagic.io/builds" \
+            -H "Content-Type: application/json" \
+            -H "x-auth-token: ${{ secrets.CODEMAGIC_API_TOKEN }}" \
+            -d '{
+              "appId": "${{ secrets.CODEMAGIC_APP_ID }}",
+              "workflowId": "android-release",
+              "branch": "main"
+            }'
+
+  # ── 8. Build iOS IPA via Codemagic ──────────────────────────────────────────
+  build-ios:
+    name: Build → iOS (Codemagic)
+    needs: [security, test-flutter]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Codemagic iOS build
+        run: |
+          curl -s -X POST \
+            "https://api.codemagic.io/builds" \
+            -H "Content-Type: application/json" \
+            -H "x-auth-token: ${{ secrets.CODEMAGIC_API_TOKEN }}" \
+            -d '{
+              "appId": "${{ secrets.CODEMAGIC_APP_ID }}",
+              "workflowId": "ios-release",
+              "branch": "main"
+            }'

@@ -7,11 +7,7 @@ workflows:
     instance_type: mac_mini_m2
     working_directory: ventigo_app
     triggering:
-      events:
-        - push
-      branch_patterns:
-        - pattern: main
-          include: true
+      enabled: false
     environment:
       flutter: stable
       vars:
@@ -51,11 +47,7 @@ workflows:
     instance_type: mac_mini_m2
     working_directory: ventigo_app
     triggering:
-      events:
-        - push
-      branch_patterns:
-        - pattern: main
-          include: true
+      enabled: false
     environment:
       flutter: stable
       ios_signing:
@@ -100,11 +92,7 @@ workflows:
     instance_type: mac_mini_m2
     working_directory: ventigo_app
     triggering:
-      events:
-        - push
-      branch_patterns:
-        - pattern: main
-          include: true
+      enabled: false
     environment:
       flutter: stable
       vars:
