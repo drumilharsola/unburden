@@ -1,6 +1,7 @@
 class ChatMessage {
   final String type;
   final String from;
+  final String? fromSession;
   final String text;
   final double ts;
   final String? clientId;
@@ -8,6 +9,7 @@ class ChatMessage {
   const ChatMessage({
     this.type = 'message',
     required this.from,
+    this.fromSession,
     required this.text,
     required this.ts,
     this.clientId,
@@ -17,6 +19,7 @@ class ChatMessage {
     return ChatMessage(
       type: json['type'] as String? ?? 'message',
       from: json['from'] as String,
+      fromSession: json['from_session'] as String?,
       text: json['text'] as String,
       ts: (json['ts'] as num).toDouble(),
       clientId: json['client_id'] as String?,
@@ -50,6 +53,7 @@ sealed class TranscriptItem {
 
 class TranscriptMessage extends TranscriptItem {
   final String from;
+  final String? fromSession;
   final String text;
   @override
   final double ts;
@@ -58,7 +62,7 @@ class TranscriptMessage extends TranscriptItem {
   final String? replyText;   // preview text of the replied message
   final String? replyFrom;   // author of the replied message
 
-  TranscriptMessage({required this.from, required this.text, required this.ts, this.clientId, this.replyTo, this.replyText, this.replyFrom});
+  TranscriptMessage({required this.from, this.fromSession, required this.text, required this.ts, this.clientId, this.replyTo, this.replyText, this.replyFrom});
 }
 
 class TranscriptMarker extends TranscriptItem {

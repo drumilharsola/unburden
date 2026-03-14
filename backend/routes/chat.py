@@ -211,6 +211,7 @@ async def chat_ws(websocket: WebSocket, token: str = "", room_id: str = ""):
                 record = {
                     "type": "message",
                     "from": username,
+                    "from_session": session_id,
                     "text": text,
                     "ts": int(time.time()),
                 }

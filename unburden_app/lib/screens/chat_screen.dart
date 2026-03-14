@@ -328,7 +328,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           return _buildMarker(item);
         }
         if (item is TranscriptMessage) {
-          final isMe = item.from == auth.username;
+          final isMe = item.fromSession != null
+              ? item.fromSession == auth.sessionId
+              : item.from == auth.username;
           return _buildBubble(item, isMe);
         }
         return const SizedBox.shrink();

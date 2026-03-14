@@ -123,17 +123,18 @@ class ChatNotifier extends StateNotifier<ChatState> {
   void _applyRoomData(RoomMessages data) {
     final msgs = data.messages.map<TranscriptItem>((m) => TranscriptMessage(
       from: m.from,
+      fromSession: m.fromSession,
       text: m.text,
       ts: m.ts,
       clientId: m.clientId,
     )).toList();
 
-    // Add 'started' marker at matched_at time (when the room was created)
-    final matchedTs = double.tryParse(data.matchedAt) ?? 0;
+    // Add 'started' marker only when both users have messaged (started_at is set)
+    final startedTs = double.tryParse(data.startedAt) ?? 0;
     final hasStartedMarker = state.transcript.any((t) => t is TranscriptMarker && t.event == 'started' && t.roomId == roomId);
     final List<TranscriptItem> extra = [];
-    if (matchedTs > 0 && !hasStartedMarker) {
-      extra.add(TranscriptMarker(event: 'started', roomId: roomId, ts: matchedTs));
+    if (startedTs > 0 && !hasStartedMarker) {
+      extra.add(TranscriptMarker(event: 'started', roomId: roomId, ts: startedTs));
     }
 
     state = state.copyWith(
@@ -185,6 +186,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         final msgs = (data['messages'] as List?)
             ?.map((m) => TranscriptMessage(
                   from: m['from'] as String,
+                  fromSession: m['from_session'] as String?,
                   text: m['text'] as String,
                   ts: (m['ts'] as num).toDouble(),
                   clientId: m['client_id'] as String?,
@@ -200,6 +202,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       case 'message':
         final msg = TranscriptMessage(
           from: data['from'] as String,
+          fromSession: data['from_session'] as String?,
           text: data['text'] as String,
           ts: (data['ts'] as num).toDouble(),
           clientId: data['client_id'] as String?,
@@ -254,9 +257,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   void sendMessage(String text, {TranscriptMessage? replyTo}) {
     if (text.isEmpty || _channel == null || _username == null) return;
+    final sessionId = ref.read(authProvider).sessionId;
     final clientId = 'msg-${DateTime.now().millisecondsSinceEpoch}-${text.hashCode.toRadixString(36)}';
     final optimistic = TranscriptMessage(
       from: _username!,
+      fromSession: sessionId,
       text: text,
       ts: (DateTime.now().millisecondsSinceEpoch / 1000),
       clientId: clientId,

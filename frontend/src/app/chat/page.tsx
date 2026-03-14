@@ -15,6 +15,7 @@ import { FlowLogo } from "@/components/FlowLogo";
 interface ChatMessage {
   type: "message";
   from: string;
+  from_session?: string;
   text: string;
   ts: number;
   client_id?: string;
@@ -47,7 +48,7 @@ function ChatContent() {
   const roomId = params.get("room_id") ?? "";
   const peerSessionId = params.get("peer_session_id") ?? "";
 
-  const { token, username, _hasHydrated } = useAuthStore();
+  const { token, username, sessionId, _hasHydrated } = useAuthStore();
 
   const [messages, setMessages] = useState<TranscriptItem[]>([]);
   const [input, setInput] = useState("");
@@ -151,7 +152,7 @@ function ChatContent() {
     const transcript: TranscriptItem[] = [];
     for (const detail of roomDetails) {
       if (!detail) continue;
-      const startedMarkerTs = Number(detail.matched_at || detail.started_at || 0);
+      const startedMarkerTs = Number(detail.started_at || 0);
       if (startedMarkerTs) {
         transcript.push({ type: "session_marker", event: "started", roomId: detail.room_id, ts: startedMarkerTs });
       }
@@ -171,7 +172,7 @@ function ChatContent() {
     if (data.peer_username) setPeerUsername(data.peer_username);
     if (data.peer_avatar_id != null) setPeerAvatarId(data.peer_avatar_id);
     if (data.peer_session_id) setResolvedPeerSessionId(data.peer_session_id);
-    setRoomStartedMarkerTs(Number(data.matched_at || data.started_at || 0) || null);
+    setRoomStartedMarkerTs(Number(data.started_at || 0) || null);
     const durationSeconds = Number(data.duration || 15 * 60);
 
     if (data.started_at) {
@@ -218,7 +219,7 @@ function ChatContent() {
         if (data.status === "ended") {
           const transcript = await buildCombinedTranscript(token, roomId, peerSessionId || data.peer_session_id || "", data.peer_username);
           setMessages(transcript.length > 0 ? transcript : data.messages);
-          setRoomStartedMarkerTs(Number(data.matched_at || data.started_at || 0) || null);
+          setRoomStartedMarkerTs(Number(data.started_at || 0) || null);
           if (data.peer_username) setPeerUsername(data.peer_username);
           if (data.peer_avatar_id != null) setPeerAvatarId(data.peer_avatar_id);
           setTimerStarted(Boolean(data.started_at));
@@ -226,7 +227,7 @@ function ChatContent() {
         } else {
           const transcript = await buildCombinedTranscript(token, roomId, peerSessionId || data.peer_session_id || "", data.peer_username);
           setMessages(transcript.length > 0 ? transcript : data.messages);
-          setRoomStartedMarkerTs(Number(data.matched_at || data.started_at || 0) || null);
+          setRoomStartedMarkerTs(Number(data.started_at || 0) || null);
           if (data.peer_username) setPeerUsername(data.peer_username);
           if (data.peer_avatar_id != null) setPeerAvatarId(data.peer_avatar_id);
           const durationSeconds = Number(data.duration || 15 * 60);
@@ -656,7 +657,9 @@ function ChatContent() {
             );
           }
 
-          const isMe = msg.from === username;
+          const isMe = msg.from_session
+            ? msg.from_session === sessionId
+            : msg.from === username;
           return (
             <div key={i} className="msg-enter" style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start" }}>
               {!isMe && (
