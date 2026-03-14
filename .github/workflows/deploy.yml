@@ -8,31 +8,11 @@ on:
         required: true
         type: choice
         options:
-          - backend
-          - web
           - android
           - ios
           - all
 
 jobs:
-  # ── Backend → Railway ───────────────────────────────────────────────────────
-  deploy-backend:
-    name: Deploy → Railway
-    if: inputs.target == 'backend' || inputs.target == 'all'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger Railway deploy
-        run: curl -sf -X POST "${{ secrets.RAILWAY_DEPLOY_HOOK }}"
-
-  # ── Web → Vercel ────────────────────────────────────────────────────────────
-  deploy-web:
-    name: Deploy → Vercel
-    if: inputs.target == 'web' || inputs.target == 'all'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger Vercel deploy
-        run: curl -sf -X POST "${{ secrets.VERCEL_DEPLOY_HOOK }}"
-
   # ── Android → Codemagic ────────────────────────────────────────────────────
   build-android:
     name: Build → Android
