@@ -15,7 +15,7 @@ class Settings(BaseSettings):
 
     # ── Brevo (transactional email) ─────────────────────────────────────────
     BREVO_API_KEY: str = ""
-    SMTP_FROM: str = "Ventigo <dhruharsola@gmail.com>"
+    EMAIL_FROM: str = "Ventigo <dhruharsola@gmail.com>"
 
     # ── Sentry (error tracking) ─────────────────────────────────────────────
     SENTRY_DSN: str = ""

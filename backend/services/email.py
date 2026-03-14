@@ -14,12 +14,12 @@ from config import get_settings
 logger = logging.getLogger(__name__)
 
 
-def _parse_sender(smtp_from: str) -> dict:
+def _parse_sender(email_from: str) -> dict:
     """Parse 'Name <email>' or plain 'email' into Brevo sender dict."""
-    match = re.match(r'^(.+?)\s*<(.+?)>$', smtp_from.strip())
+    match = re.match(r'^(.+?)\s*<(.+?)>$', email_from.strip())
     if match:
         return {"name": match.group(1).strip(), "email": match.group(2).strip()}
-    return {"name": "Ventigo", "email": smtp_from.strip()}
+    return {"name": "Ventigo", "email": email_from.strip()}
 
 
 async def _send_email(
@@ -71,7 +71,7 @@ async def _send_email(
                 "Content-Type": "application/json",
             },
             json={
-                "sender": _parse_sender(settings.SMTP_FROM),
+                "sender": _parse_sender(settings.EMAIL_FROM),
                 "to": [{"email": to_email}],
                 "subject": subject,
                 "htmlContent": html,

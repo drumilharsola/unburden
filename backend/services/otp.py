@@ -25,14 +25,12 @@ def generate_otp() -> str:
     return f"{random.SystemRandom().randint(0, 999999):06d}"
 
 
-DEV_OTP = "000000"  # Fixed code accepted in dev mode when SMTP is not configured
+DEV_OTP = "000000"  # Fixed code accepted in dev mode when Brevo is not configured
 
 
 def _is_dev_mode() -> bool:
     s = get_settings()
-    return s.APP_ENV == "development" and (
-        not s.SMTP_USER or s.SMTP_USER == "your_email@gmail.com"
-    )
+    return s.APP_ENV == "development" and not s.BREVO_API_KEY
 
 
 async def store_otp(email: str) -> str:
@@ -41,7 +39,7 @@ async def store_otp(email: str) -> str:
     redis = await get_redis()
 
     email_hash = _hash_email(email)
-    # In dev mode with no SMTP configured, use a fixed bypass OTP
+    # In dev mode with no Brevo key, use a fixed bypass OTP
     otp = DEV_OTP if _is_dev_mode() else generate_otp()
 
     ttl = settings.OTP_EXPIRE_MINUTES * 60
@@ -55,7 +53,7 @@ async def store_otp(email: str) -> str:
 async def verify_otp(email: str, otp: str) -> bool:
     """
     Verify submitted OTP. Deletes OTP on success.
-    In dev mode (no SMTP), code 000000 is always accepted.
+    In dev mode (no Brevo key), code 000000 is always accepted.
     Limits to 5 attempts before invalidating.
     """
     redis = await get_redis()
