@@ -1,4 +1,4 @@
-name: CI / CD
+name: CI
 
 on:
   push:
@@ -114,53 +114,3 @@ jobs:
             -Dsonar.tests=backend/tests,ventigo_app/test
             -Dsonar.python.coverage.reportPaths=backend/coverage.xml
             -Dsonar.coverageReportPaths=ventigo_app/coverage/lcov.info
-
-  # ── 5. Trigger Railway deploy ────────────────────────────────────────────────
-  deploy-backend:
-    name: Trigger → Railway
-    needs: [security, test-backend]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger Railway deploy hook
-        run: curl -s -X POST "${{ secrets.RAILWAY_DEPLOY_HOOK }}"
-
-  # ── 6. Vercel deploys automatically after CI passes (Wait for CI enabled) ──
-
-  # ── 7. Trigger Codemagic Android build ──────────────────────────────────────
-  build-android:
-    name: Trigger → Android (Codemagic)
-    needs: [security, test-flutter]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger Codemagic Android build
-        run: |
-          curl -s -X POST \
-            "https://api.codemagic.io/builds" \
-            -H "Content-Type: application/json" \
-            -H "x-auth-token: ${{ secrets.CODEMAGIC_API_TOKEN }}" \
-            -d '{
-              "appId": "${{ secrets.CODEMAGIC_APP_ID }}",
-              "workflowId": "android-release",
-              "branch": "main"
-            }'
-
-  # ── 8. Trigger Codemagic iOS build ──────────────────────────────────────────
-  build-ios:
-    name: Trigger → iOS (Codemagic)
-    needs: [security, test-flutter]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger Codemagic iOS build
-        run: |
-          curl -s -X POST \
-            "https://api.codemagic.io/builds" \
-            -H "Content-Type: application/json" \
-            -H "x-auth-token: ${{ secrets.CODEMAGIC_API_TOKEN }}" \
-            -d '{
-              "appId": "${{ secrets.CODEMAGIC_APP_ID }}",
-              "workflowId": "ios-release",
-              "branch": "main"
-            }'
