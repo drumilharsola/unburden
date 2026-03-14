@@ -28,7 +28,7 @@ jobs:
           pip install pip-audit --quiet
           pip-audit -r backend/requirements.txt --desc on
 
-  # ── 2. Backend unit tests ────────────────────────────────────────────────────
+  # ── 2. Backend unit tests + coverage ─────────────────────────────────────────
   test-backend:
     name: Backend Tests
     runs-on: ubuntu-latest
@@ -37,12 +37,80 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
 
-      - run: pip install -r requirements.txt pytest --quiet
+      - run: pip install -r requirements.txt pytest pytest-cov --quiet
 
-      - run: pytest tests/ -v --tb=short
+      - name: Run tests with coverage
+        run: pytest tests/ -v --tb=short --cov=. --cov-report=xml:coverage.xml
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+
+  # ── 3. Flutter tests + coverage ──────────────────────────────────────────────
+  test-flutter:
+    name: Flutter Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ventigo_app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Run tests with coverage
+        run: flutter test --coverage
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flutter-coverage
+          path: ventigo_app/coverage/lcov.info
+
+  # ── 4. SonarCloud analysis ──────────────────────────────────────────────────
+  sonarcloud:
+    name: SonarCloud
+    needs: [test-backend, test-flutter]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: flutter-coverage
+          path: ventigo_app/coverage/
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v4
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=${{ github.repository_owner }}
+            -Dsonar.projectKey=drumilharsola_ventigo
+            -Dsonar.sources=backend,ventigo_app/lib
+            -Dsonar.tests=backend/tests,ventigo_app/test
+            -Dsonar.python.coverage.reportPaths=backend/coverage.xml
+            -Dsonar.coverageReportPaths=ventigo_app/coverage/lcov.info
