@@ -360,17 +360,6 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
                 ],
               ),
                   ),
-                  IconButton(
-                    onPressed: () {
-                      _syncRooms();
-                      _syncBoard();
-                    },
-                    icon: const Icon(Icons.refresh, size: 22),
-                    color: AppColors.slate,
-                    tooltip: 'Refresh',
-                    splashRadius: 20,
-                  ),
-                  const SizedBox(width: 4),
                 ],
               ),
             ),
