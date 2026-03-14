@@ -698,6 +698,18 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
                               style: AppTypography.title(fontSize: 16, color: AppColors.ink),
                             ),
                           ),
+                          IconButton(
+                            onPressed: () {
+                              _syncBoard();
+                              _syncRooms();
+                            },
+                            icon: const Icon(Icons.refresh_rounded, size: 20),
+                            color: AppColors.slate,
+                            tooltip: 'Refresh',
+                            splashRadius: 18,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          ),
                           if (!emailVerified)
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
