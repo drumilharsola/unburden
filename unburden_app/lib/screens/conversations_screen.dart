@@ -476,17 +476,13 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
                       ),
                     ),
                   ),
-                  // Centered content
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (!wait.isWaiting) ...[
+                  // Content
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: !wait.isWaiting
                           // Vent button
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: GestureDetector(
+                          ? GestureDetector(
                               onTap: _ventLoading ? null : _handleVent,
                               child: Container(
                                 width: double.infinity,
@@ -528,15 +524,11 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
                                   ],
                                 ),
                               ),
-                            ),
-                          ),
-                        ] else ...[
+                            )
                           // Waiting state
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: Container(
+                          : Container(
                               width: double.infinity,
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                               decoration: BoxDecoration(
                                 color: AppColors.ink,
                                 borderRadius: AppRadii.lgAll,
@@ -562,16 +554,9 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 14),
-                                  const SizedBox(
-                                    width: 56,
-                                    height: 56,
-                                    child: BreathingCircle(),
-                                  ),
                                   const SizedBox(height: 10),
-                                  Text('Breathe. Someone will show up.',
-                                      style: AppTypography.body(fontSize: 13, color: Colors.white54)),
-                                  const SizedBox(height: 10),
+                                  const BreathingCircle(size: 48),
+                                  const SizedBox(height: 8),
                                   FlowButton(
                                     label: 'Cancel',
                                     variant: FlowButtonVariant.ghost,
@@ -581,9 +566,6 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
                                 ],
                               ),
                             ),
-                          ),
-                        ],
-                      ],
                     ),
                   ),
                 ],
