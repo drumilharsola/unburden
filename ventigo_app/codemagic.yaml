@@ -1,0 +1,124 @@
+workflows:
+
+  # ── Android APK (debug + release) ─────────────────────────────────────────
+  android-release:
+    name: Android Release
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    environment:
+      flutter: stable
+      vars:
+        API_BASE_URL: $API_BASE_URL
+        SENTRY_DSN: $SENTRY_DSN
+        ONESIGNAL_APP_ID: $ONESIGNAL_APP_ID
+        POSTHOG_API_KEY: $POSTHOG_API_KEY
+        POSTHOG_HOST: $POSTHOG_HOST
+    scripts:
+      - name: Get dependencies
+        script: flutter pub get
+      - name: Run tests
+        script: flutter test
+      - name: Build APK
+        script: |
+          flutter build apk --release \
+            --dart-define=API_BASE_URL=$API_BASE_URL \
+            --dart-define=SENTRY_DSN=$SENTRY_DSN \
+            --dart-define=ONESIGNAL_APP_ID=$ONESIGNAL_APP_ID \
+            --dart-define=POSTHOG_API_KEY=$POSTHOG_API_KEY \
+            --dart-define=POSTHOG_HOST=$POSTHOG_HOST \
+            --dart-define=APP_ENV=production
+    artifacts:
+      - build/**/outputs/**/*.apk
+    publishing:
+      email:
+        recipients:
+          - dhruharsola@gmail.com
+        notify:
+          success: true
+          failure: true
+
+  # ── iOS (requires Apple Developer account + certificates in Codemagic) ────
+  ios-release:
+    name: iOS Release
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    environment:
+      flutter: stable
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.ventigo.app
+      vars:
+        API_BASE_URL: $API_BASE_URL
+        SENTRY_DSN: $SENTRY_DSN
+        ONESIGNAL_APP_ID: $ONESIGNAL_APP_ID
+        POSTHOG_API_KEY: $POSTHOG_API_KEY
+        POSTHOG_HOST: $POSTHOG_HOST
+    scripts:
+      - name: Get dependencies
+        script: flutter pub get
+      - name: Set up code signing
+        script: xcode-project use-profiles
+      - name: Run tests
+        script: flutter test
+      - name: Build IPA
+        script: |
+          flutter build ipa --release --export-options-plist=/Users/builder/export_options.plist \
+            --dart-define=API_BASE_URL=$API_BASE_URL \
+            --dart-define=SENTRY_DSN=$SENTRY_DSN \
+            --dart-define=ONESIGNAL_APP_ID=$ONESIGNAL_APP_ID \
+            --dart-define=POSTHOG_API_KEY=$POSTHOG_API_KEY \
+            --dart-define=POSTHOG_HOST=$POSTHOG_HOST \
+            --dart-define=APP_ENV=production
+    artifacts:
+      - build/ios/ipa/*.ipa
+    publishing:
+      email:
+        recipients:
+          - dhruharsola@gmail.com
+        notify:
+          success: true
+          failure: true
+
+  # ── Flutter Web (optional — Vercel handles this, but useful for testing) ──
+  web-build:
+    name: Web Build
+    max_build_duration: 15
+    instance_type: mac_mini_m2
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    environment:
+      flutter: stable
+      vars:
+        API_BASE_URL: $API_BASE_URL
+        SENTRY_DSN: $SENTRY_DSN
+        POSTHOG_API_KEY: $POSTHOG_API_KEY
+        POSTHOG_HOST: $POSTHOG_HOST
+    scripts:
+      - name: Get dependencies
+        script: flutter pub get
+      - name: Build web
+        script: |
+          flutter build web --release \
+            --dart-define=API_BASE_URL=$API_BASE_URL \
+            --dart-define=SENTRY_DSN=$SENTRY_DSN \
+            --dart-define=POSTHOG_API_KEY=$POSTHOG_API_KEY \
+            --dart-define=POSTHOG_HOST=$POSTHOG_HOST \
+            --dart-define=APP_ENV=production
+    artifacts:
+      - build/web/**

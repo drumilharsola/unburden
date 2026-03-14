@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:posthog_flutter/posthog_flutter.dart';
 
 import 'config/brand.dart';
 import 'config/env.dart';
@@ -17,6 +18,14 @@ void main() async {
     OneSignal.Debug.setLogLevel(OSLogLevel.warn);
     OneSignal.initialize(Env.onesignalAppId);
     OneSignal.Notifications.requestPermission(true);
+  }
+
+  // ── PostHog (product analytics) ──────────────────────────────────────────
+  if (Env.posthogApiKey.isNotEmpty) {
+    final config = PostHogConfig(Env.posthogApiKey);
+    config.host = Env.posthogHost;
+    config.captureApplicationLifecycleEvents = true;
+    await Posthog().setup(config);
   }
 
   // ── Sentry ───────────────────────────────────────────────────────────────

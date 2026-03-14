@@ -45,6 +45,12 @@ class Env {
   /// OneSignal App ID - set via --dart-define=ONESIGNAL_APP_ID=xxx
   static const String onesignalAppId = String.fromEnvironment('ONESIGNAL_APP_ID', defaultValue: '');
 
+  /// PostHog API key - set via --dart-define=POSTHOG_API_KEY=phc_xxx
+  static const String posthogApiKey = String.fromEnvironment('POSTHOG_API_KEY', defaultValue: '');
+
+  /// PostHog host - set via --dart-define=POSTHOG_HOST=https://us.i.posthog.com
+  static const String posthogHost = String.fromEnvironment('POSTHOG_HOST', defaultValue: 'https://us.i.posthog.com');
+
   /// Environment name for Sentry / analytics.
   static const String environment = String.fromEnvironment('APP_ENV', defaultValue: 'production');
 

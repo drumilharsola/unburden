@@ -16,7 +16,12 @@ $FLUTTER pub get
 
 echo "==> Building web..."
 $FLUTTER build web --release \
-  --dart-define=API_BASE_URL=${API_BASE_URL:-}
+  --dart-define=API_BASE_URL=${API_BASE_URL:-} \
+  --dart-define=SENTRY_DSN=${SENTRY_DSN:-} \
+  --dart-define=ONESIGNAL_APP_ID=${ONESIGNAL_APP_ID:-} \
+  --dart-define=POSTHOG_API_KEY=${POSTHOG_API_KEY:-} \
+  --dart-define=POSTHOG_HOST=${POSTHOG_HOST:-https://us.i.posthog.com} \
+  --dart-define=APP_ENV=${APP_ENV:-production}
 
 # Fail loudly if Flutter didn't produce output
 if [ ! -f "build/web/index.html" ]; then
