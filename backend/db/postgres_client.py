@@ -20,6 +20,11 @@ def get_engine():
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
+        # Strip sslmode from URL — asyncpg doesn't support it as a query param;
+        # SSL is configured via connect_args below instead.
+        import re
+        url = re.sub(r'[?&]sslmode=[^&]*', '', url)
+
         # Neon serverless Postgres: needs SSL and conservative pool sizes
         is_neon = "neon.tech" in url or "neon" in url
         connect_args = {"ssl": "require"} if is_neon else {}
