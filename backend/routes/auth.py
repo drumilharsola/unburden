@@ -14,11 +14,13 @@ import secrets
 import logging
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr, field_validator
 from passlib.context import CryptContext
 from sqlalchemy import select, update, delete as sa_delete
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from config import get_settings
 from services.otp import get_email_hash
@@ -34,6 +36,7 @@ from db.models import User, Profile, BlockedUser
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+limiter = Limiter(key_func=get_remote_address)
 
 _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -115,7 +118,8 @@ async def _send_verify_link(email: str, session_id: str, redis) -> None:
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-async def register(body: RegisterRequest):
+@limiter.limit("5/hour")
+async def register(request: Request, body: RegisterRequest):
     """Create a new account. JWT is issued immediately; email_verified starts False."""
     email = body.email.lower().strip()
     email_hash = get_email_hash(email)
@@ -160,7 +164,8 @@ async def register(body: RegisterRequest):
 
 
 @router.post("/login")
-async def login(body: LoginRequest):
+@limiter.limit("10/minute")
+async def login(request: Request, body: LoginRequest):
     """Sign in with email + password. Returns JWT."""
     email = body.email.lower().strip()
     email_hash = get_email_hash(email)
@@ -197,7 +202,8 @@ async def login(body: LoginRequest):
 
 
 @router.post("/send-verification", status_code=status.HTTP_202_ACCEPTED)
-async def send_verification(payload: dict = Depends(require_auth)):
+@limiter.limit("3/hour")
+async def send_verification(request: Request, payload: dict = Depends(require_auth)):
     """Resend email verification link. Rate-limited to 1 per minute."""
     session_id = payload["sub"]
     redis = await get_redis()
@@ -384,7 +390,8 @@ class ResetPasswordRequest(BaseModel):
 
 
 @router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
-async def forgot_password(body: ForgotPasswordRequest):
+@limiter.limit("5/hour")
+async def forgot_password(request: Request, body: ForgotPasswordRequest):
     """Send a password reset link. Always returns 202 to avoid email enumeration."""
     redis = await get_redis()
     email = body.email.lower().strip()
@@ -422,7 +429,8 @@ async def forgot_password(body: ForgotPasswordRequest):
 
 
 @router.post("/reset-password")
-async def reset_password(body: ResetPasswordRequest):
+@limiter.limit("5/hour")
+async def reset_password(request: Request, body: ResetPasswordRequest):
     """Reset password using a valid token."""
     redis = await get_redis()
     session_id = await redis.get(f"pwd_reset_token:{body.token}")
@@ -484,7 +492,8 @@ async def export_data(payload: dict = Depends(require_auth)):
 
 
 @router.delete("/account")
-async def delete_account(payload: dict = Depends(require_auth)):
+@limiter.limit("3/hour")
+async def delete_account(request: Request, payload: dict = Depends(require_auth)):
     """Permanently delete the user account and all associated data."""
     session_id = payload["sub"]
 
