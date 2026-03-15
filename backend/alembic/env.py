@@ -1,9 +1,14 @@
 import asyncio
+import sys
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
+
+# Ensure backend root is on sys.path so local modules resolve
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from config import get_settings
 from db.models import Base

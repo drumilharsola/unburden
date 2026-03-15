@@ -5,6 +5,7 @@ import '../models/room_summary.dart';
 import '../models/room_messages.dart';
 import '../models/blocked_user.dart';
 import '../models/user_profile.dart';
+import '../models/appreciation.dart';
 import '../models/current_speaker_request.dart';
 
 /// Thrown on 401 responses - mirrors AuthError from api.ts.
@@ -256,6 +257,27 @@ class ApiClient {
       await _dio.post('/chat/rooms/${Uri.encodeComponent(roomId)}/feedback',
           data: {'mood': mood, 'text': text},
           options: Options(headers: _authHeader(token)));
+    } catch (e) { _rethrow(e); }
+  }
+
+  // -------------------------- APPRECIATION --------------------------
+
+  Future<Map<String, dynamic>> postAppreciation(String token, String roomId, String message) async {
+    try {
+      final res = await _dio.post('/chat/rooms/${Uri.encodeComponent(roomId)}/appreciate',
+          data: {'message': message},
+          options: Options(headers: _authHeader(token)));
+      return res.data as Map<String, dynamic>;
+    } catch (e) { _rethrow(e); }
+  }
+
+  Future<List<Appreciation>> getAppreciations(String token, String username, {int limit = 20, int offset = 0}) async {
+    try {
+      final res = await _dio.get('/auth/user/${Uri.encodeComponent(username)}/appreciations',
+          queryParameters: {'limit': limit, 'offset': offset},
+          options: Options(headers: _authHeader(token)));
+      final list = (res.data['appreciations'] as List?) ?? [];
+      return list.map((e) => Appreciation.fromJson(e as Map<String, dynamic>)).toList();
     } catch (e) { _rethrow(e); }
   }
 

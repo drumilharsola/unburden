@@ -11,6 +11,7 @@ import '../screens/verify_screen.dart';
 import '../screens/verify_email_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/blocked_users_screen.dart';
+import '../screens/appreciations_screen.dart';
 import '../screens/main_shell.dart';
 import '../screens/chat_screen.dart';
 import '../screens/unified_chat_screen.dart';
@@ -100,6 +101,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       }),
       GoRoute(path: kPathProfile, builder: (_, __) => const ProfileScreen()),
       GoRoute(path: '/blocked-users', builder: (_, __) => const BlockedUsersScreen()),
+      GoRoute(path: '/appreciations', builder: (_, state) {
+        final username = state.uri.queryParameters['username'];
+        return AppreciationsScreen(username: username);
+      }),
 
       // -- Main shell with bottom navigation --
       GoRoute(path: kPathHome, builder: (_, __) => const MainShell(initialIndex: 0)),

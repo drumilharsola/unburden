@@ -9,6 +9,7 @@ class RoomMessages {
   final String startedAt;
   final String duration;
   final String endedAt;
+  final bool hasAppreciated;
   final List<ChatMessage> messages;
 
   const RoomMessages({
@@ -20,6 +21,7 @@ class RoomMessages {
     required this.startedAt,
     required this.duration,
     required this.endedAt,
+    required this.hasAppreciated,
     required this.messages,
   });
 
@@ -33,6 +35,7 @@ class RoomMessages {
       startedAt: json['started_at'] as String? ?? '',
       duration: json['duration']?.toString() ?? '900',
       endedAt: json['ended_at'] as String? ?? '',
+      hasAppreciated: json['has_appreciated'] as bool? ?? false,
       messages: (json['messages'] as List?)
               ?.map((m) => ChatMessage.fromJson(m as Map<String, dynamic>))
               .toList() ??

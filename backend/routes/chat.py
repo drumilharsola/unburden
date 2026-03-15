@@ -53,6 +53,7 @@ from services.session import (
     save_feedback, create_room,
     get_connection, create_connection, accept_connection,
     delete_connection, list_connections, list_pending_requests,
+    submit_appreciation, has_appreciated,
 )
 from services.moderation import check_content
 from middleware.jwt_auth import require_auth
@@ -381,6 +382,7 @@ async def _build_room_entry(rid: str, session_id: str, blocked_ids: set) -> dict
         return None
     peer_profile = await get_profile(peer_session_id) if peer_session_id else None
     role = "speaker" if room.get("user_a") == session_id else "listener"
+    appreciated = await has_appreciated(session_id, rid) if room.get("status") == "ended" else False
     return {
         "room_id": rid,
         "role": role,
@@ -392,6 +394,7 @@ async def _build_room_entry(rid: str, session_id: str, blocked_ids: set) -> dict
         "peer_session_id": peer_session_id,
         "peer_username": peer_profile.get("username", stored_username) if peer_profile else stored_username,
         "peer_avatar_id": int(peer_profile.get("avatar_id", stored_avatar_id) if peer_profile else stored_avatar_id),
+        "has_appreciated": appreciated,
     }
 
 
@@ -431,6 +434,7 @@ async def get_room_messages_endpoint(
     reactions = await get_reactions(room_id)
     peer_session_id, stored_username, stored_avatar_id = _peer_context(room, session_id)
     peer_profile = await get_profile(peer_session_id) if peer_session_id else None
+    appreciated = await has_appreciated(session_id, room_id) if room.get("status") == "ended" else False
     return {
         "room_id": room_id,
         "status": room.get("status"),
@@ -443,6 +447,7 @@ async def get_room_messages_endpoint(
         "peer_avatar_id": int(peer_profile.get("avatar_id", stored_avatar_id) if peer_profile else stored_avatar_id),
         "messages": messages,
         "reactions": reactions,
+        "has_appreciated": appreciated,
     }
 
 
@@ -473,6 +478,63 @@ async def post_feedback(
 
 
 # -- Connections ---------------------------------------------------------------
+
+
+class AppreciationRequest(BaseModel):
+    message: str
+
+
+@router.post("/rooms/{room_id}/appreciate",
+             status_code=201,
+             responses={404: {"description": "Room not found"},
+                        403: {"description": "Access denied"},
+                        400: {"description": "Room still active"},
+                        409: {"description": "Already appreciated"}})
+async def post_appreciation(
+    room_id: str,
+    body: AppreciationRequest,
+    session: Annotated[dict, Depends(require_auth)],
+):
+    """Send a post-chat appreciation to the peer in a finished room."""
+    session_id = session["sub"]
+    room = await get_room(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    is_member = room.get("user_a") == session_id or room.get("user_b") == session_id
+    if not is_member:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if room.get("status") != "ended":
+        raise HTTPException(status_code=400, detail="Appreciation can only be sent after the chat ends")
+
+    text = _sanitize(body.message)
+    if not text or len(text.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+    text = text[:500]
+
+    # Determine peer and role
+    is_user_a = room.get("user_a") == session_id
+    peer_session_id = room.get("user_b") if is_user_a else room.get("user_a", "")
+    from_role = "venter" if is_user_a else "listener"
+
+    profile = await get_profile(session_id)
+    from_username = profile.get("username", "") if profile else ""
+
+    try:
+        result = await submit_appreciation(
+            from_session_id=session_id,
+            to_session_id=peer_session_id,
+            room_id=room_id,
+            from_username=from_username,
+            from_role=from_role,
+            message=text,
+        )
+    except Exception as exc:
+        if "uq_appreciation_per_room" in str(exc):
+            raise HTTPException(status_code=409, detail="You already sent an appreciation for this chat")
+        raise
+
+    return result
+
 
 @router.post("/connect/{peer_session_id}",
              responses={400: {"description": "Invalid connection request"}})

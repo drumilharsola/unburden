@@ -33,6 +33,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   String? _saveError;
   int _speakCount = 0;
   int _listenCount = 0;
+  int _appreciationCount = 0;
   String _memberSince = '';
   bool _deleting = false;
   bool? _emailVerified;
@@ -55,6 +56,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       setState(() {
         _speakCount = me.speakCount;
         _listenCount = me.listenCount;
+        _appreciationCount = me.appreciationCount;
         _memberSince = me.memberSince;
         _emailVerified = me.emailVerified;
         _email = me.email;
@@ -355,17 +357,41 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               constraints: const BoxConstraints(maxWidth: 360),
               child: WarmCard(
                 padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-                child: IntrinsicHeight(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _stat('Total', _speakCount + _listenCount),
-                      VerticalDivider(color: AppColors.border, thickness: 1, width: 1),
-                      _stat('Vent 🎤', _speakCount),
-                      VerticalDivider(color: AppColors.border, thickness: 1, width: 1),
-                      _stat('Support 🤝', _listenCount),
-                    ],
-                  ),
+                child: Column(
+                  children: [
+                    // Appreciation row (tappable)
+                    GestureDetector(
+                      onTap: () => context.push('/appreciations'),
+                      child: Column(
+                        children: [
+                          Text(_appreciationCount.toString(), style: AppTypography.title(fontSize: 28)),
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text('Appreciations 💛', style: AppTypography.label(fontSize: 13, color: AppColors.slate)),
+                              const SizedBox(width: 4),
+                              Icon(Icons.chevron_right, size: 16, color: AppColors.slate),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Divider(color: AppColors.border, height: 1),
+                    const SizedBox(height: 16),
+                    // Vent / Listen row
+                    IntrinsicHeight(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _stat('Vent 🎤', _speakCount),
+                          VerticalDivider(color: AppColors.border, thickness: 1, width: 1),
+                          _stat('Support 🤝', _listenCount),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

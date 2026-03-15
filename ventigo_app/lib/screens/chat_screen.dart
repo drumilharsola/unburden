@@ -12,7 +12,6 @@ import '../widgets/flow_button.dart';
 import '../widgets/pill.dart';
 import '../widgets/timer_widget.dart';
 import '../widgets/typing_indicator.dart';
-import '../widgets/session_end_modal.dart';
 import '../widgets/report_modal.dart';
 import '../widgets/user_profile_modal.dart';
 import '../widgets/safety_dialog.dart';
@@ -36,12 +35,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   bool _showPeerProfile = false;
   bool _safetyShown = false;
   TranscriptMessage? _replyTo;
+  final _appreciationCtrl = TextEditingController();
+  bool _appreciationSent = false;
+  bool _appreciationSending = false;
 
   @override
   void dispose() {
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
     _inputFocus.dispose();
+    _appreciationCtrl.dispose();
     super.dispose();
   }
 
@@ -153,18 +156,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   List<Widget> _buildModals(ChatState chat, ChatNotifier notifier, AuthState auth) {
+    // Auto-dismiss sessionEnded so no modal blocks the chat
+    if (chat.sessionEnded) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => notifier.dismissSessionEnd());
+    }
     return [
-      if (chat.sessionEnded)
-        SessionEndModal(
-          canExtend: chat.canExtend,
-          canContinue: !chat.peerLeft,
-          peerLeft: chat.peerLeft,
-          continueWaiting: chat.continueWaiting,
-          onExtend: notifier.extend,
-          onContinue: notifier.requestContinue,
-          onClose: notifier.dismissSessionEnd,
-          onFeedback: (mood) => notifier.sendFeedback(mood),
-        ),
       if (_showReport) ReportModal(onClose: () => setState(() => _showReport = false)),
       if (_showPeerProfile && chat.peerUsername != null && auth.token != null)
         UserProfileModal(
@@ -251,12 +247,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               // Report
               IconButton(icon: Text('⚑', style: TextStyle(fontSize: 16, color: AppColors.slate)), onPressed: () => setState(() => _showReport = true)),
 
-              // Leave
+              // End Chat
               FlowButton(
-                label: 'Leave',
+                label: 'End Chat',
                 variant: FlowButtonVariant.danger,
                 size: FlowButtonSize.sm,
-                onPressed: () { notifier.leave(); _goBack(); },
+                onPressed: () => notifier.leave(),
               ),
             ],
           ],
@@ -297,7 +293,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       );
     }
 
-    final itemCount = chat.transcript.length + (chat.peerTyping ? 1 : 0) + (chat.mode == 'live' ? 1 : 0);
+    final hasEnded = chat.transcript.any((t) => t is TranscriptMarker && t.event == 'ended');
+    final itemCount = chat.transcript.length + (chat.peerTyping ? 1 : 0) + (chat.mode == 'live' ? 1 : 0) + (hasEnded ? 1 : 0);
     return ListView.builder(
       controller: _scrollCtrl,
       padding: const EdgeInsets.all(20),
@@ -319,9 +316,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     final msgIndex = chat.mode == 'live' ? i - 1 : i;
 
-    // Typing indicator at end
+    // Typing indicator
     if (chat.peerTyping && msgIndex == chat.transcript.length) {
       return TypingIndicator(username: chat.peerUsername ?? '');
+    }
+
+    // Inline appreciation widget after the last ended marker
+    final hasEnded = chat.transcript.any((t) => t is TranscriptMarker && t.event == 'ended');
+    if (hasEnded && msgIndex == chat.transcript.length) {
+      return _buildInlineAppreciation(chat);
     }
 
     if (msgIndex < 0 || msgIndex >= chat.transcript.length) return const SizedBox.shrink();
@@ -340,26 +343,114 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Widget _buildMarker(TranscriptMarker marker) {
     final isStarted = marker.event == 'started';
-    final label = isStarted ? 'Session started' : 'Session ended';
-    final icon = isStarted ? Icons.play_circle_outline : Icons.stop_circle_outlined;
-    final color = isStarted ? AppColors.accent : AppColors.slate;
+    final label = isStarted ? 'Chat started' : 'Chat ended';
+    final time = _formatTime(marker.ts);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        children: [
-          Expanded(child: Divider(color: color.withValues(alpha: 0.25), thickness: 0.5)),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(icon, size: 14, color: color),
-              const SizedBox(width: 6),
-              Text(label, style: AppTypography.ui(fontSize: 11, fontWeight: FontWeight.w500, color: color)),
-              const SizedBox(width: 8),
-              Text(_formatTime(marker.ts), style: AppTypography.body(fontSize: 11, color: AppColors.mist)),
-            ]),
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isStarted
+              ? AppColors.success.withValues(alpha: 0.08)
+              : AppColors.danger.withValues(alpha: 0.06),
+          border: Border.all(
+            color: isStarted
+                ? AppColors.success.withValues(alpha: 0.2)
+                : AppColors.danger.withValues(alpha: 0.15),
           ),
-          Expanded(child: Divider(color: color.withValues(alpha: 0.25), thickness: 0.5)),
+          borderRadius: BorderRadius.circular(AppRadii.full),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(
+            isStarted ? Icons.play_circle_outline_rounded : Icons.stop_circle_outlined,
+            size: 14,
+            color: isStarted ? AppColors.success : AppColors.danger,
+          ),
+          const SizedBox(width: 6),
+          Text(label, style: AppTypography.ui(fontSize: 11, fontWeight: FontWeight.w600,
+              color: isStarted ? AppColors.success : AppColors.danger)),
+          const SizedBox(width: 8),
+          Text(time, style: AppTypography.body(fontSize: 10, color: AppColors.mist)),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildInlineAppreciation(ChatState chat) {
+    final notifier = ref.read(chatProvider(widget.roomId).notifier);
+    final peer = chat.peerUsername ?? 'your peer';
+
+    if (chat.appreciationSent || _appreciationSent) {
+      return Container(
+        margin: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.accentDim,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.accentGlow),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('💛', style: TextStyle(fontSize: 18)),
+            const SizedBox(width: 8),
+            Expanded(child: Text('Thank you for appreciating your peer', style: AppTypography.ui(fontSize: 13, color: AppColors.accent, fontWeight: FontWeight.w600))),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Appreciate $peer 💛', style: AppTypography.label(fontSize: 13, color: AppColors.slate)),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _appreciationCtrl,
+            maxLength: 500,
+            maxLines: 3,
+            minLines: 1,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
+              hintText: 'You made this conversation meaningful…',
+              hintStyle: AppTypography.body(color: AppColors.fog),
+              filled: true,
+              fillColor: AppColors.snow,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppColors.border)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppColors.border)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppColors.accent)),
+              counterText: '',
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FlowButton(
+              label: _appreciationSending ? 'Sending…' : 'Send',
+              size: FlowButtonSize.sm,
+              onPressed: _appreciationSending ? null : () async {
+                final text = _appreciationCtrl.text.trim();
+                if (text.isEmpty) return;
+                setState(() => _appreciationSending = true);
+                try {
+                  await notifier.sendAppreciation(text);
+                  setState(() { _appreciationSent = true; _appreciationSending = false; });
+                } catch (_) {
+                  setState(() => _appreciationSending = false);
+                }
+              },
+            ),
+          ),
         ],
       ),
     );

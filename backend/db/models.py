@@ -45,6 +45,7 @@ class Profile(Base):
     email_verified = Column(Boolean, default=False, nullable=False)
     speak_count = Column(Integer, default=0, nullable=False)
     listen_count = Column(Integer, default=0, nullable=False)
+    appreciation_count = Column(Integer, default=0, nullable=False)
     created_at = Column(BigInteger, default=lambda: int(time.time()), nullable=False)
 
     user = relationship("User", back_populates="profile")
@@ -64,6 +65,25 @@ class BlockedUser(Base):
     __table_args__ = (
         UniqueConstraint("blocker_session_id", "blocked_session_id", name="uq_block_pair"),
         Index("ix_blocker", "blocker_session_id"),
+    )
+
+
+class Appreciation(Base):
+    """Post-chat appreciation sent from one user to another."""
+    __tablename__ = "appreciations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    from_session_id = Column(String(64), ForeignKey(_USER_SESSION_ID_FK, ondelete="CASCADE"), nullable=False)
+    to_session_id = Column(String(64), ForeignKey(_USER_SESSION_ID_FK, ondelete="CASCADE"), nullable=False)
+    room_id = Column(String(64), nullable=False)
+    from_username = Column(String(64), nullable=False)
+    from_role = Column(String(16), nullable=False)  # venter | listener
+    message = Column(String(500), nullable=False)
+    created_at = Column(BigInteger, default=lambda: int(time.time()), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("from_session_id", "room_id", name="uq_appreciation_per_room"),
+        Index("ix_appreciation_to", "to_session_id"),
     )
 
 

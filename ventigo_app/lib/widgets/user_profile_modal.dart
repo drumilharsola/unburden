@@ -183,12 +183,27 @@ class _UserProfileModalState extends ConsumerState<UserProfileModal> {
         ],
         const SizedBox(height: 20),
         // Stats
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        Column(
           children: [
-            _stat('Vent 🎤', p.speakCount),
-            _stat('Support 🤝', p.listenCount),
-            _stat('Total', p.speakCount + p.listenCount),
+            // Appreciation count (not tappable for peer profiles)
+            Column(
+              children: [
+                Text(p.appreciationCount.toString(), style: AppTypography.title(fontSize: 24)),
+                const SizedBox(height: 4),
+                Text('Appreciations 💛', style: AppTypography.label(fontSize: 12, color: AppColors.slate)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Divider(color: AppColors.border, height: 1),
+            const SizedBox(height: 12),
+            // Vent / Listen row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _stat('Vent 🎤', p.speakCount),
+                _stat('Support 🤝', p.listenCount),
+              ],
+            ),
           ],
         ),
         _buildBlockSection(p),

@@ -3,6 +3,7 @@ class UserProfile {
   final int avatarId;
   final int speakCount;
   final int listenCount;
+  final int appreciationCount;
   final String memberSince;
   final bool? emailVerified;
   final String email;
@@ -12,6 +13,7 @@ class UserProfile {
     required this.avatarId,
     this.speakCount = 0,
     this.listenCount = 0,
+    this.appreciationCount = 0,
     this.memberSince = '',
     this.emailVerified,
     this.email = '',
@@ -23,6 +25,7 @@ class UserProfile {
       avatarId: (json['avatar_id'] as num).toInt(),
       speakCount: (json['speak_count'] as num?)?.toInt() ?? 0,
       listenCount: (json['listen_count'] as num?)?.toInt() ?? 0,
+      appreciationCount: (json['appreciation_count'] as num?)?.toInt() ?? 0,
       memberSince: json['member_since']?.toString() ?? '',
       emailVerified: json['email_verified'] as bool?,
       email: json['email']?.toString() ?? '',

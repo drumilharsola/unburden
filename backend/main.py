@@ -105,10 +105,14 @@ async def handle_timeout_error(_: Request, exc: AsyncTimeoutError):
     )
 
 # -- CORS ----------------------------------------------------------------------
+_cors_origins = settings.allowed_origins_list
+if settings.APP_ENV == "development":
+    _cors_origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins_list,
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=settings.APP_ENV != "development",
     allow_methods=["*"],
     allow_headers=["*"],
 )

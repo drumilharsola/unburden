@@ -12,7 +12,6 @@ import '../state/chat_provider.dart';
 import '../widgets/flow_button.dart';
 import '../widgets/timer_widget.dart';
 import '../widgets/typing_indicator.dart';
-import '../widgets/session_end_modal.dart';
 import '../utils/time_helpers.dart';
 import '../widgets/report_modal.dart';
 import '../widgets/user_profile_modal.dart';
@@ -47,6 +46,9 @@ class _UnifiedChatScreenState extends ConsumerState<UnifiedChatScreen> {
   bool _showReport = false;
   bool _showPeerProfile = false;
   TranscriptMessage? _replyTo;
+  final _appreciationCtrls = <String, TextEditingController>{};
+  final _appreciatedRoomIds = <String>{};
+  final _sendingRoomIds = <String>{};
 
   void _goBack() {
     if (Navigator.of(context).canPop()) {
@@ -67,6 +69,7 @@ class _UnifiedChatScreenState extends ConsumerState<UnifiedChatScreen> {
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
     _inputFocus.dispose();
+    for (final c in _appreciationCtrls.values) { c.dispose(); }
     super.dispose();
   }
 
@@ -127,6 +130,10 @@ class _UnifiedChatScreenState extends ConsumerState<UnifiedChatScreen> {
       final transcript = await _loadAllTranscripts(token, peerRooms);
 
       if (mounted) {
+        // Populate already-appreciated rooms from backend data
+        for (final room in peerRooms) {
+          if (room.hasAppreciated) _appreciatedRoomIds.add(room.roomId);
+        }
         setState(() {
           _peerRooms = peerRooms;
           _unifiedTranscript = transcript;
@@ -261,11 +268,11 @@ class _UnifiedChatScreenState extends ConsumerState<UnifiedChatScreen> {
 
           // Modals
           if (liveChat?.sessionEnded == true && liveNotifier != null)
-            SessionEndModal(
-              canExtend: liveChat!.canExtend,
-              onExtend: liveNotifier.extend,
-              onClose: liveNotifier.dismissSessionEnd,
-            ),
+            Builder(builder: (_) {
+              // Auto-dismiss sessionEnded so no modal blocks the chat
+              WidgetsBinding.instance.addPostFrameCallback((_) => liveNotifier!.dismissSessionEnd());
+              return const SizedBox.shrink();
+            }),
           if (_showReport) ReportModal(onClose: () => setState(() => _showReport = false)),
           if (_showPeerProfile && auth.token != null)
             UserProfileModal(
@@ -349,13 +356,10 @@ class _UnifiedChatScreenState extends ConsumerState<UnifiedChatScreen> {
                 onPressed: () => setState(() => _showReport = true),
               ),
               FlowButton(
-                label: 'Leave',
+                label: 'End Chat',
                 variant: FlowButtonVariant.danger,
                 size: FlowButtonSize.sm,
-                onPressed: () {
-                  liveNotifier!.leave();
-                  _goBack();
-                },
+                onPressed: () => liveNotifier!.leave(),
               ),
             ] else ...[
               IconButton(
@@ -380,20 +384,34 @@ class _UnifiedChatScreenState extends ConsumerState<UnifiedChatScreen> {
       );
     }
 
-    final itemCount = transcript.length + (liveChat?.peerTyping == true ? 1 : 0);
+    // Build flat list: transcript items + appreciation after each ended marker
+    final items = <_ListEntry>[];
+    for (final item in transcript) {
+      items.add(_ListEntry.transcript(item));
+      if (item is TranscriptMarker && item.event == 'ended') {
+        items.add(_ListEntry.appreciation(item.roomId));
+      }
+    }
+    if (liveChat?.peerTyping == true) {
+      items.add(_ListEntry.typing());
+    }
 
     return ListView.builder(
       controller: _scrollCtrl,
       padding: const EdgeInsets.all(20),
-      itemCount: itemCount,
+      itemCount: items.length,
       itemBuilder: (_, i) {
-        // Typing indicator at end
-        if (liveChat?.peerTyping == true && i == transcript.length) {
+        final entry = items[i];
+
+        if (entry.isTyping) {
           return TypingIndicator(username: widget.peerUsername);
         }
 
-        final item = transcript[i];
+        if (entry.appreciationRoomId != null) {
+          return _buildInlineAppreciation(entry.appreciationRoomId!);
+        }
 
+        final item = entry.item!;
         if (item is TranscriptMarker) {
           return _buildMarker(item);
         }
@@ -411,7 +429,7 @@ class _UnifiedChatScreenState extends ConsumerState<UnifiedChatScreen> {
 
   Widget _buildMarker(TranscriptMarker marker) {
     final isStarted = marker.event == 'started';
-    final label = isStarted ? 'Session started' : 'Session ended';
+    final label = isStarted ? 'Chat started' : 'Chat ended';
     final time = _formatDateTime(marker.ts);
 
     return Center(
@@ -441,6 +459,91 @@ class _UnifiedChatScreenState extends ConsumerState<UnifiedChatScreen> {
           const SizedBox(width: 8),
           Text(time, style: AppTypography.body(fontSize: 10, color: AppColors.slate)),
         ]),
+      ),
+    );
+  }
+
+  Widget _buildInlineAppreciation(String roomId) {
+    final peer = widget.peerUsername;
+    final alreadySent = _appreciatedRoomIds.contains(roomId);
+
+    if (alreadySent) {
+      return Container(
+        margin: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.accentDim,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.accentGlow),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('💛', style: TextStyle(fontSize: 18)),
+            const SizedBox(width: 8),
+            Expanded(child: Text('Thank you for appreciating your peer', style: AppTypography.ui(fontSize: 13, color: AppColors.accent, fontWeight: FontWeight.w600))),
+          ],
+        ),
+      );
+    }
+
+    _appreciationCtrls.putIfAbsent(roomId, () => TextEditingController());
+    final ctrl = _appreciationCtrls[roomId]!;
+    final isSending = _sendingRoomIds.contains(roomId);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Appreciate $peer 💛', style: AppTypography.label(fontSize: 13, color: AppColors.slate)),
+          const SizedBox(height: 10),
+          TextField(
+            controller: ctrl,
+            maxLength: 500,
+            maxLines: 3,
+            minLines: 1,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
+              hintText: 'You made this conversation meaningful…',
+              hintStyle: AppTypography.body(color: AppColors.fog),
+              filled: true,
+              fillColor: AppColors.snow,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppColors.border)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppColors.border)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppColors.accent)),
+              counterText: '',
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FlowButton(
+              label: isSending ? 'Sending…' : 'Send',
+              size: FlowButtonSize.sm,
+              onPressed: isSending ? null : () async {
+                final text = ctrl.text.trim();
+                if (text.isEmpty) return;
+                final token = ref.read(authProvider).token;
+                if (token == null || roomId.isEmpty) return;
+                setState(() => _sendingRoomIds.add(roomId));
+                try {
+                  await ref.read(apiClientProvider).postAppreciation(token, roomId, text);
+                  setState(() { _appreciatedRoomIds.add(roomId); _sendingRoomIds.remove(roomId); });
+                } catch (_) {
+                  setState(() => _sendingRoomIds.remove(roomId));
+                }
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -651,4 +754,16 @@ class _UnifiedChatScreenState extends ConsumerState<UnifiedChatScreen> {
       ),
     );
   }
+}
+
+/// Helper to mix transcript items and appreciation widgets in a flat list.
+class _ListEntry {
+  final TranscriptItem? item;
+  final String? appreciationRoomId;
+  final bool isTyping;
+
+  const _ListEntry._({this.item, this.appreciationRoomId, this.isTyping = false});
+  factory _ListEntry.transcript(TranscriptItem item) => _ListEntry._(item: item);
+  factory _ListEntry.appreciation(String roomId) => _ListEntry._(appreciationRoomId: roomId);
+  factory _ListEntry.typing() => const _ListEntry._(isTyping: true);
 }

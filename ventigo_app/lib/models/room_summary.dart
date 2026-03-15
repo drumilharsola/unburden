@@ -9,6 +9,7 @@ class RoomSummary {
   final String matchedAt;
   final String status;
   final String duration;
+  final bool hasAppreciated;
 
   const RoomSummary({
     required this.roomId,
@@ -21,6 +22,7 @@ class RoomSummary {
     required this.matchedAt,
     required this.status,
     required this.duration,
+    required this.hasAppreciated,
   });
 
   factory RoomSummary.fromJson(Map<String, dynamic> json) {
@@ -35,6 +37,7 @@ class RoomSummary {
       matchedAt: json['matched_at'] as String? ?? '',
       status: json['status'] as String? ?? '',
       duration: json['duration']?.toString() ?? '900',
+      hasAppreciated: json['has_appreciated'] as bool? ?? false,
     );
   }
 }

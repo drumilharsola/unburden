@@ -21,7 +21,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from db.redis_client import get_redis, hset_with_ttl
 from db.postgres_client import get_session_factory
-from db.models import Profile, BlockedUser
+from db.models import Profile, BlockedUser, Appreciation
 from config import get_settings
 
 ROOM_TTL_ACTIVE = 7 * 24 * 3600 + 3600  # 7 days + 1h buffer while active
@@ -51,6 +51,7 @@ async def save_profile(
             email_verified=initial_verified,
             speak_count=0,
             listen_count=0,
+            appreciation_count=0,
             created_at=int(time.time()),
         ).on_conflict_do_update(
             index_elements=["session_id"],
@@ -93,6 +94,7 @@ async def get_profile(session_id: str) -> Optional[dict]:
             "email_verified": "1" if row.email_verified else "0",
             "speak_count": str(row.speak_count),
             "listen_count": str(row.listen_count),
+            "appreciation_count": str(row.appreciation_count),
             "created_at": str(row.created_at),
         }
 
@@ -394,6 +396,82 @@ async def save_feedback(room_id: str, session_id: str, mood: str, text: str = ""
         data["text"] = text
     await redis.hset(f"room:{room_id}:feedback:{session_id}", mapping=data)
     await redis.expire(f"room:{room_id}:feedback:{session_id}", ROOM_TTL_AFTER)
+
+
+# --- Appreciations (PostgreSQL) ------------------------------------------------
+
+async def submit_appreciation(
+    from_session_id: str,
+    to_session_id: str,
+    room_id: str,
+    from_username: str,
+    from_role: str,
+    message: str,
+) -> dict:
+    """Insert an appreciation and increment the recipient's appreciation_count."""
+    factory = get_session_factory()
+    async with factory() as db:
+        appr = Appreciation(
+            from_session_id=from_session_id,
+            to_session_id=to_session_id,
+            room_id=room_id,
+            from_username=from_username,
+            from_role=from_role,
+            message=message,
+            created_at=int(time.time()),
+        )
+        db.add(appr)
+        await db.execute(
+            update(Profile)
+            .where(Profile.session_id == to_session_id)
+            .values(appreciation_count=Profile.appreciation_count + 1)
+        )
+        await db.commit()
+        await db.refresh(appr)
+        return {
+            "id": appr.id,
+            "from_username": appr.from_username,
+            "from_role": appr.from_role,
+            "message": appr.message,
+            "created_at": appr.created_at,
+        }
+
+
+async def get_appreciations(session_id: str, limit: int = 20, offset: int = 0) -> list[dict]:
+    """Return appreciations received by a user, newest first."""
+    factory = get_session_factory()
+    async with factory() as db:
+        result = await db.execute(
+            select(Appreciation)
+            .where(Appreciation.to_session_id == session_id)
+            .order_by(Appreciation.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        rows = result.scalars().all()
+        return [
+            {
+                "id": r.id,
+                "from_username": r.from_username,
+                "from_role": r.from_role,
+                "message": r.message,
+                "created_at": r.created_at,
+            }
+            for r in rows
+        ]
+
+
+async def has_appreciated(from_session_id: str, room_id: str) -> bool:
+    """Check if the user has already sent an appreciation for a given room."""
+    factory = get_session_factory()
+    async with factory() as db:
+        result = await db.execute(
+            select(Appreciation.id)
+            .where(Appreciation.from_session_id == from_session_id,
+                   Appreciation.room_id == room_id)
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
 
 
 # --- Connections (PostgreSQL) --------------------------------------------------

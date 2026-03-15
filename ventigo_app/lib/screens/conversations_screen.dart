@@ -283,7 +283,10 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
     setState(() => _error = '');
     try {
       final res = await ref.read(apiClientProvider).acceptSpeaker(token, requestId);
-      if (mounted) context.push('/chat?room_id=${Uri.encodeComponent(res.roomId)}');
+      if (mounted) {
+        setState(() => _board = _board.where((r) => r.requestId != requestId).toList());
+        context.push('/chat?room_id=${Uri.encodeComponent(res.roomId)}');
+      }
     } on AuthException {
       ref.read(authProvider.notifier).clear();
       if (mounted) context.go(kPathVerify);

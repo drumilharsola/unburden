@@ -3,16 +3,18 @@ import 'package:go_router/go_router.dart';
 import '../config/theme.dart';
 import '../widgets/flow_button.dart';
 
-/// Session-end modal with mood check, continue, and extend.
+/// Session-end modal with mood check, appreciation, continue, and extend.
 class SessionEndModal extends StatefulWidget {
   final bool canExtend;
   final bool canContinue;
   final bool peerLeft;
   final bool continueWaiting;
+  final String? peerUsername;
   final VoidCallback onExtend;
   final VoidCallback onContinue;
   final VoidCallback onClose;
   final void Function(String mood)? onFeedback;
+  final Future<void> Function(String message)? onAppreciation;
 
   const SessionEndModal({
     super.key,
@@ -20,10 +22,12 @@ class SessionEndModal extends StatefulWidget {
     this.canContinue = true,
     this.peerLeft = false,
     this.continueWaiting = false,
+    this.peerUsername,
     required this.onExtend,
     this.onContinue = _noop,
     required this.onClose,
     this.onFeedback,
+    this.onAppreciation,
   });
 
   static void _noop() {}
@@ -34,6 +38,27 @@ class SessionEndModal extends StatefulWidget {
 
 class _SessionEndModalState extends State<SessionEndModal> {
   String? _selectedMood;
+  final _appreciationController = TextEditingController();
+  bool _appreciationSent = false;
+  bool _appreciationSending = false;
+
+  @override
+  void dispose() {
+    _appreciationController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitAppreciation() async {
+    final text = _appreciationController.text.trim();
+    if (text.isEmpty || widget.onAppreciation == null) return;
+    setState(() => _appreciationSending = true);
+    try {
+      await widget.onAppreciation!(text);
+      setState(() { _appreciationSent = true; _appreciationSending = false; });
+    } catch (_) {
+      setState(() => _appreciationSending = false);
+    }
+  }
 
   static const _moods = [
     ('😌', 'Calm', 'calm'),
@@ -141,6 +166,74 @@ class _SessionEndModalState extends State<SessionEndModal> {
     ];
   }
 
+  Widget _buildAppreciation() {
+    if (widget.onAppreciation == null) return const SizedBox.shrink();
+    final peer = widget.peerUsername ?? 'them';
+
+    if (_appreciationSent) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.accentDim,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.accentGlow),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('💛', style: TextStyle(fontSize: 18)),
+            const SizedBox(width: 8),
+            Text('Appreciation sent!', style: AppTypography.ui(color: AppColors.accent, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Leave a note for $peer 💛', style: AppTypography.label(color: AppColors.slate)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _appreciationController,
+          maxLength: 500,
+          maxLines: 3,
+          minLines: 1,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: InputDecoration(
+            hintText: 'You made this conversation meaningful…',
+            hintStyle: AppTypography.body(color: AppColors.fog),
+            filled: true,
+            fillColor: AppColors.card,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.border),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.border),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.accent),
+            ),
+            counterText: '',
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FlowButton(
+            label: _appreciationSending ? 'Sending…' : 'Send appreciation',
+            size: FlowButtonSize.sm,
+            onPressed: _appreciationSending ? null : _submitAppreciation,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Center(
@@ -155,17 +248,21 @@ class _SessionEndModalState extends State<SessionEndModal> {
             border: Border.all(color: AppColors.border),
             boxShadow: warmShadow(blur: 32, opacity: 0.12),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildHeader(),
-              const SizedBox(height: 20),
-              if (!widget.peerLeft) ...[
-                _buildMoodPicker(),
-                const SizedBox(height: 24),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildHeader(),
+                const SizedBox(height: 20),
+                if (!widget.peerLeft) ...[
+                  _buildMoodPicker(),
+                  const SizedBox(height: 20),
+                  _buildAppreciation(),
+                  const SizedBox(height: 24),
+                ],
+                ..._buildActionButtons(context),
               ],
-              ..._buildActionButtons(context),
-            ],
+            ),
           ),
         ),
       ),

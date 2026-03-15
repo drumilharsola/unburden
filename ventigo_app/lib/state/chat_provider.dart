@@ -26,6 +26,7 @@ class ChatState {
   final String mode; // checking | live | readonly | expired
   final bool continueWaiting;
   final bool endingSoon;
+  final bool appreciationSent;
   final Map<String, List<ReactionEntry>> reactions;
 
   const ChatState({
@@ -44,6 +45,7 @@ class ChatState {
     this.mode = 'checking',
     this.continueWaiting = false,
     this.endingSoon = false,
+    this.appreciationSent = false,
     this.reactions = const {},
   });
 
@@ -64,6 +66,7 @@ class ChatState {
     bool clearConnectionError = false,
     bool? continueWaiting,
     bool? endingSoon,
+    bool? appreciationSent,
     Map<String, List<ReactionEntry>>? reactions,
   }) {
     return ChatState(
@@ -82,6 +85,7 @@ class ChatState {
       mode: mode ?? this.mode,
       continueWaiting: continueWaiting ?? this.continueWaiting,
       endingSoon: endingSoon ?? this.endingSoon,
+      appreciationSent: appreciationSent ?? this.appreciationSent,
       reactions: reactions ?? this.reactions,
     );
   }
@@ -174,6 +178,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       peerSessionId: data.peerSessionId.isNotEmpty ? data.peerSessionId : state.peerSessionId,
       remaining: _computeRemaining(data),
       timerStarted: data.startedAt.isNotEmpty,
+      appreciationSent: data.hasAppreciated,
     );
   }
 
@@ -413,9 +418,18 @@ class ChatNotifier extends StateNotifier<ChatState> {
     } catch (_) {}
   }
 
+  Future<void> sendAppreciation(String message) async {
+    final token = _token;
+    if (token == null) return;
+    await _api.postAppreciation(token, roomId, message);
+    state = state.copyWith(appreciationSent: true);
+  }
+
   void leave() {
     _channel?.sink.add(jsonEncode({'type': 'leave'}));
     _close();
+    _appendMarkerIfMissing('ended');
+    state = state.copyWith(mode: 'readonly');
   }
 
   void dismissSessionEnd() {

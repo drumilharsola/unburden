@@ -27,7 +27,7 @@ from services.otp import get_email_hash
 from services.email import send_verification_email
 from services.session_token import create_session_token
 from services.username_gen import generate_unique_username
-from services.session import save_profile, get_profile, set_email_verified, get_blocked_set
+from services.session import save_profile, get_profile, set_email_verified, get_blocked_set, get_appreciations
 from middleware.jwt_auth import require_auth
 from db.redis_client import get_redis
 from db.postgres_client import get_session_factory
@@ -345,6 +345,7 @@ async def get_me(payload: Annotated[dict, Depends(require_auth)]):
         "avatar_id": int(profile.get("avatar_id", 0)),
         "speak_count": int(profile.get("speak_count", 0)),
         "listen_count": int(profile.get("listen_count", 0)),
+        "appreciation_count": int(profile.get("appreciation_count", 0)),
         "member_since": profile.get("created_at", ""),
         "email_verified": profile.get("email_verified") == "1",
         "email": email or "",
@@ -376,8 +377,39 @@ async def get_user_profile(username: str, payload: Annotated[dict, Depends(requi
         "avatar_id": profile_row.avatar_id,
         "speak_count": profile_row.speak_count,
         "listen_count": profile_row.listen_count,
+        "appreciation_count": profile_row.appreciation_count,
         "member_since": str(profile_row.created_at),
     }
+
+
+@router.get("/user/{username}/appreciations")
+async def get_user_appreciations(
+    username: str,
+    payload: Annotated[dict, Depends(require_auth)],
+    limit: int = 20,
+    offset: int = 0,
+):
+    """Paginated list of appreciations received by a user."""
+    requester_session_id = payload["sub"]
+
+    factory = get_session_factory()
+    async with factory() as db:
+        result = await db.execute(select(Profile).where(Profile.username == username))
+        profile_row = result.scalar_one_or_none()
+
+    if not profile_row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    session_id = profile_row.session_id
+
+    blocked = await get_blocked_set(session_id)
+    if requester_session_id in blocked:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    limit = max(1, min(limit, 50))
+    offset = max(0, offset)
+    items = await get_appreciations(session_id, limit=limit, offset=offset)
+    return {"appreciations": items}
 
 
 # --- Password Reset ----------------------------------------------------------
