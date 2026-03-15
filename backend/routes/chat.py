@@ -106,8 +106,12 @@ async def _ws_authenticate(websocket: WebSocket, token: str) -> dict | None:
         return None
     device_token = payload.get("dt")
     if device_token:
-        redis_check = await get_redis()
-        active_dt = await redis_check.get(f"active_device:{payload['sub']}")
+        try:
+            redis_check = await get_redis()
+            active_dt = await redis_check.get(f"active_device:{payload['sub']}")
+        except Exception:
+            logger.warning("Redis unavailable during chat WS device check – allowing connection")
+            return payload
         if active_dt and active_dt != device_token:
             await websocket.close(code=4001, reason="Session replaced by another device")
             return None

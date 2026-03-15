@@ -142,8 +142,12 @@ async def _board_ws_authenticate(websocket: WebSocket, token: str) -> str | None
     session_id = claims["sub"]
     device_token = claims.get("dt")
     if device_token:
-        redis_check = await get_redis()
-        active_dt = await redis_check.get(f"active_device:{session_id}")
+        try:
+            redis_check = await get_redis()
+            active_dt = await redis_check.get(f"active_device:{session_id}")
+        except Exception:
+            logger.warning("Redis unavailable during board WS device check – allowing connection")
+            return session_id
         if active_dt and active_dt != device_token:
             await websocket.send_json({"event": "error", "detail": "session_replaced"})
             await websocket.close(code=4401)

@@ -4,7 +4,7 @@ from redis.exceptions import RedisError
 from config import get_settings
 
 _redis_client: aioredis.Redis | None = None
-REDIS_SOCKET_TIMEOUT_SECONDS = 2
+REDIS_SOCKET_TIMEOUT_SECONDS = 5
 
 
 async def get_redis() -> aioredis.Redis:

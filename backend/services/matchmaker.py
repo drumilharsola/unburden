@@ -96,6 +96,7 @@ async def _matchmaker_loop() -> None:
     """Background loop that pairs users from queues."""
     redis = await get_redis()
     logger.info("Matchmaker started")
+    backoff = 1  # seconds between iterations; grows on repeated failures
 
     while True:
         try:
@@ -113,10 +114,15 @@ async def _matchmaker_loop() -> None:
                     await redis.publish(f"session:{sid_b}", payload)
                     logger.info(f"Matched {sid_a} <-> {sid_b} → room {room_id}")
 
+            backoff = 1  # reset on success
+
         except Exception as exc:
             logger.exception(f"Matchmaker error: {exc}")
+            backoff = min(backoff * 2, 30)  # exponential backoff, cap at 30s
+            # Re-acquire Redis client in case the connection is stale
+            redis = await get_redis()
 
-        await asyncio.sleep(1)
+        await asyncio.sleep(backoff)
 
 
 def start_matchmaker() -> None:
