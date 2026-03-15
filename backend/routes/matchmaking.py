@@ -8,10 +8,13 @@ Matchmaking routes:
 
 import asyncio
 import json
+import logging
+from asyncio import TimeoutError as AsyncTimeoutError
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel
+from redis.exceptions import RedisError
 
 from middleware.jwt_auth import require_auth
 from services.matchmaker import enqueue, dequeue, is_queued
@@ -19,6 +22,7 @@ from services.session import get_profile, get_active_room_id_for_session
 from services.speaker_board import get_request_for_session
 from db.redis_client import get_redis
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/match", tags=["matchmaking"])
 
 
@@ -78,11 +82,16 @@ async def matchmaking_ws(websocket: WebSocket, token: str = ""):
         return
 
     await websocket.accept()
-    redis = await get_redis()
 
-    # Subscribe to personal channel
-    pubsub = redis.pubsub()
-    await pubsub.subscribe(f"session:{session_id}")
+    try:
+        redis = await get_redis()
+        pubsub = redis.pubsub()
+        await pubsub.subscribe(f"session:{session_id}")
+    except (RedisError, OSError, AsyncTimeoutError) as exc:
+        logger.error(f"Redis unavailable in matchmaking WS setup: {exc}")
+        await websocket.send_json({"event": "error", "detail": "service_unavailable"})
+        await websocket.close(code=1011)
+        return
 
     try:
         async for message in pubsub.listen():
@@ -93,6 +102,14 @@ async def matchmaking_ws(websocket: WebSocket, token: str = ""):
                     break
     except (WebSocketDisconnect, asyncio.CancelledError):
         pass
+    except (RedisError, OSError, AsyncTimeoutError) as exc:
+        logger.error(f"Redis unavailable in matchmaking WS listen: {exc}")
+        await websocket.send_json({"event": "error", "detail": "service_unavailable"})
+        await websocket.close(code=1011)
+        return
     finally:
-        await pubsub.unsubscribe(f"session:{session_id}")
-        await pubsub.aclose()
+        try:
+            await pubsub.unsubscribe(f"session:{session_id}")
+            await pubsub.aclose()
+        except Exception:
+            pass

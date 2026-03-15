@@ -11,9 +11,11 @@ WS     /board/ws?token=...       - real-time board + match notifications
 import json
 import asyncio
 import logging
+from asyncio import TimeoutError as AsyncTimeoutError
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from redis.exceptions import RedisError
 
 from middleware.jwt_auth import require_auth
 from services.speaker_board import (
@@ -201,12 +203,19 @@ async def board_ws(websocket: WebSocket, token: str = ""):
     if not session_id:
         return
 
-    redis = await get_redis()
-    pubsub = redis.pubsub()
-    await pubsub.subscribe("board:updates", f"session:{session_id}")
+    try:
+        redis = await get_redis()
+        pubsub = redis.pubsub()
+        await pubsub.subscribe("board:updates", f"session:{session_id}")
 
-    board = await get_board()
-    own_request_id = await get_request_for_session(session_id)
+        board = await get_board()
+        own_request_id = await get_request_for_session(session_id)
+    except (RedisError, OSError, AsyncTimeoutError) as exc:
+        logger.error(f"Redis unavailable in board WS setup: {exc}")
+        await websocket.send_json({"event": "error", "detail": "service_unavailable"})
+        await websocket.close(code=1011)
+        return
+
     await websocket.send_json({
         "event": "board_state",
         "requests": [request for request in board if request.get("request_id") != own_request_id],

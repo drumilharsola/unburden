@@ -34,12 +34,14 @@ import asyncio
 import json
 import time
 import logging
+from asyncio import TimeoutError as AsyncTimeoutError
 from typing import Annotated
 
 import bleach
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from jwt.exceptions import PyJWTError
+from redis.exceptions import RedisError
 
 from services.session_token import decode_session_token
 from services.session import (
@@ -139,44 +141,48 @@ async def _ws_send_ticks(redis, room_id: str, session_id: str, peer_id: str) -> 
     tick_lock_key = f"room:{room_id}:tick_lock"
     ending_soon_sent = False
     while True:
-        room_now = await get_room(room_id)
-        if not room_now or room_now.get("status") != "active":
-            break
+        try:
+            room_now = await get_room(room_id)
+            if not room_now or room_now.get("status") != "active":
+                break
 
-        lock_acquired = await redis.set(
-            tick_lock_key, session_id, ex=ROOM_TICK_LOCK_TTL_SECONDS, nx=True,
-        )
-        if not lock_acquired:
+            lock_acquired = await redis.set(
+                tick_lock_key, session_id, ex=ROOM_TICK_LOCK_TTL_SECONDS, nx=True,
+            )
+            if not lock_acquired:
+                await asyncio.sleep(5)
+                continue
+
+            started_at_raw = room_now.get("started_at") or ""
+            if not started_at_raw:
+                await asyncio.sleep(1)
+                continue
+
+            started_at = int(started_at_raw)
+            duration = int(room_now["duration"])
+            remaining = max(0, duration - (int(time.time()) - started_at))
+
+            tick = _room_event(room_id, {"type": "tick", "remaining": remaining})
+            await _publish(redis, session_id, tick)
+            await _publish(redis, peer_id, tick)
+
+            if remaining <= 120 and not ending_soon_sent:
+                ending_soon_sent = True
+                ending_event = _room_event(room_id, {"type": "ending_soon", "remaining": remaining})
+                await _publish(redis, session_id, ending_event)
+                await _publish(redis, peer_id, ending_event)
+
+            if remaining == 0:
+                end_event = _room_event(room_id, {"type": "session_end"})
+                await _publish(redis, session_id, end_event)
+                await _publish(redis, peer_id, end_event)
+                await close_room(room_id)
+                break
+
             await asyncio.sleep(5)
-            continue
-
-        started_at_raw = room_now.get("started_at") or ""
-        if not started_at_raw:
-            await asyncio.sleep(1)
-            continue
-
-        started_at = int(started_at_raw)
-        duration = int(room_now["duration"])
-        remaining = max(0, duration - (int(time.time()) - started_at))
-
-        tick = _room_event(room_id, {"type": "tick", "remaining": remaining})
-        await _publish(redis, session_id, tick)
-        await _publish(redis, peer_id, tick)
-
-        if remaining <= 120 and not ending_soon_sent:
-            ending_soon_sent = True
-            ending_event = _room_event(room_id, {"type": "ending_soon", "remaining": remaining})
-            await _publish(redis, session_id, ending_event)
-            await _publish(redis, peer_id, ending_event)
-
-        if remaining == 0:
-            end_event = _room_event(room_id, {"type": "session_end"})
-            await _publish(redis, session_id, end_event)
-            await _publish(redis, peer_id, end_event)
-            await close_room(room_id)
+        except (RedisError, OSError, AsyncTimeoutError) as exc:
+            logger.error(f"Redis unavailable in tick loop for room {room_id}: {exc}")
             break
-
-        await asyncio.sleep(5)
 
 
 async def _ws_relay(pubsub, websocket: WebSocket) -> None:
@@ -317,12 +323,18 @@ async def chat_ws(websocket: WebSocket, token: str = "", room_id: str = ""):
 
     username = profile["username"]
     peer_id = room["user_b"] if room["user_a"] == session_id else room["user_a"]
-    redis = await get_redis()
 
-    pubsub = redis.pubsub()
-    await pubsub.subscribe(f"chat:{session_id}")
+    try:
+        redis = await get_redis()
+        pubsub = redis.pubsub()
+        await pubsub.subscribe(f"chat:{session_id}")
+        history = await get_messages(room_id)
+    except (RedisError, OSError, AsyncTimeoutError) as exc:
+        logger.error(f"Redis unavailable in chat WS setup: {exc}")
+        await websocket.send_json({"type": "error", "detail": "service_unavailable"})
+        await websocket.close(code=1011)
+        return
 
-    history = await get_messages(room_id)
     if history:
         await websocket.send_json({"type": "history", "messages": history})
     await websocket.send_json(_room_event(room_id, _timer_status_payload(room)))
@@ -333,7 +345,10 @@ async def chat_ws(websocket: WebSocket, token: str = "", room_id: str = ""):
     try:
         await _ws_message_loop(websocket, redis, room_id, session_id, peer_id, username)
     except (WebSocketDisconnect, asyncio.CancelledError):
-        await _publish(redis, peer_id, _room_event(room_id, {"type": "peer_left"}))
+        try:
+            await _publish(redis, peer_id, _room_event(room_id, {"type": "peer_left"}))
+        except (RedisError, OSError, AsyncTimeoutError):
+            pass
     finally:
         ticker_task.cancel()
         relay_task.cancel()
